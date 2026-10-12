@@ -1,0 +1,226 @@
+{
+  "$defs": {
+    "AllowedAction": {
+      "additionalProperties": false,
+      "description": "An exact request template loaded from a trusted task store.",
+      "properties": {
+        "audience": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Audience",
+          "type": "string"
+        },
+        "body": {
+          "$ref": "#/$defs/JsonValue",
+          "default": null
+        },
+        "credential_epoch": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Credential Epoch",
+          "type": "integer"
+        },
+        "credential_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Credential Id",
+          "type": "string"
+        },
+        "max_ttl_seconds": {
+          "default": 60,
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Max Ttl Seconds",
+          "type": "integer"
+        },
+        "method": {
+          "enum": [
+            "GET",
+            "POST",
+            "PUT",
+            "PATCH",
+            "DELETE"
+          ],
+          "title": "Method",
+          "type": "string"
+        },
+        "operation": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Operation",
+          "type": "string"
+        },
+        "path": {
+          "maxLength": 1024,
+          "minLength": 1,
+          "title": "Path",
+          "type": "string"
+        },
+        "query": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ]
+          },
+          "title": "Query",
+          "type": "object"
+        },
+        "resource": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Resource",
+          "type": "string"
+        },
+        "service": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Service",
+          "type": "string"
+        }
+      },
+      "required": [
+        "service",
+        "resource",
+        "operation",
+        "method",
+        "path",
+        "credential_id",
+        "credential_epoch",
+        "audience"
+      ],
+      "title": "AllowedAction",
+      "type": "object"
+    },
+    "JsonValue": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$id": "https://agent-credential-guard.example/schema/task-context.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "AA-owned context; it is never accepted from the Agent as authority.",
+  "properties": {
+    "agent_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+      "title": "Agent Id",
+      "type": "string"
+    },
+    "agent_key_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+      "title": "Agent Key Id",
+      "type": "string"
+    },
+    "allowed_actions": {
+      "items": {
+        "$ref": "#/$defs/AllowedAction"
+      },
+      "maxItems": 64,
+      "minItems": 1,
+      "title": "Allowed Actions",
+      "type": "array"
+    },
+    "context_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+      "title": "Context Id",
+      "type": "string"
+    },
+    "expires_at": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Expires At",
+      "type": "integer"
+    },
+    "issuer": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+      "title": "Issuer",
+      "type": "string"
+    },
+    "protocol_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Protocol Version",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ACTIVE",
+        "CANCELLED",
+        "COMPLETED"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "task_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+      "title": "Task Id",
+      "type": "string"
+    },
+    "valid_from": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Valid From",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "context_id",
+    "issuer",
+    "task_id",
+    "agent_id",
+    "agent_key_id",
+    "status",
+    "valid_from",
+    "expires_at",
+    "allowed_actions"
+  ],
+  "title": "TaskContext",
+  "type": "object"
+}

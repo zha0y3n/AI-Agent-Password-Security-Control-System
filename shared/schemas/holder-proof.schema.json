@@ -1,0 +1,151 @@
+{
+  "$defs": {
+    "HolderProofBody": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Agent Id",
+          "type": "string"
+        },
+        "agent_key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Agent Key Id",
+          "type": "string"
+        },
+        "audience": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Audience",
+          "type": "string"
+        },
+        "capability_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Capability Hash",
+          "type": "string"
+        },
+        "capability_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "challenge": {
+          "pattern": "^[0-9a-f]{32,64}$",
+          "title": "Challenge",
+          "type": "string"
+        },
+        "expires_at": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Expires At",
+          "type": "integer"
+        },
+        "issued_at": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Issued At",
+          "type": "integer"
+        },
+        "proof_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Proof Id",
+          "type": "string"
+        },
+        "protocol_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "request_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "proof_id",
+        "capability_id",
+        "capability_hash",
+        "agent_id",
+        "agent_key_id",
+        "audience",
+        "request_hash",
+        "challenge",
+        "issued_at",
+        "expires_at"
+      ],
+      "title": "HolderProofBody",
+      "type": "object"
+    },
+    "ProtocolSignature": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "SM2-SM3",
+          "default": "SM2-SM3",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "encoding": {
+          "const": "ASN.1-DER/base64url-nopad",
+          "default": "ASN.1-DER/base64url-nopad",
+          "title": "Encoding",
+          "type": "string"
+        },
+        "key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Key Id",
+          "type": "string"
+        },
+        "sm2_user_id": {
+          "const": "1234567812345678",
+          "default": "1234567812345678",
+          "title": "Sm2 User Id",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 256,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "value"
+      ],
+      "title": "ProtocolSignature",
+      "type": "object"
+    }
+  },
+  "$id": "https://agent-credential-guard.example/schema/holder-proof.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "body": {
+      "$ref": "#/$defs/HolderProofBody"
+    },
+    "signature": {
+      "$ref": "#/$defs/ProtocolSignature"
+    }
+  },
+  "required": [
+    "body",
+    "signature"
+  ],
+  "title": "HolderProof",
+  "type": "object"
+}
