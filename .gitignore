@@ -35,3 +35,4 @@ prompt_injection.csv
 .vscode/
 .DS_Store
 Thumbs.db
+verify.csv
