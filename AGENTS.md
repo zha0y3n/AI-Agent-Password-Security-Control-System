@@ -1,7 +1,3 @@
-# Repository working agreement
-
-This repository follows `参考/111.md` whenever source documents disagree.
-
 ## Ownership
 
 - A owns `agent-aa/`: Python Agent and Authorization Authority.
@@ -18,21 +14,3 @@ This repository follows `参考/111.md` whenever source documents disagree.
 - Fail closed on parse, schema, key, signature, time, lifecycle, replay, or binding errors.
 - Do not hand-write SM2, SM3, or SM4 primitives and do not silently change algorithms.
 - Never commit real private keys, Credentials, tokens, runtime state, or generated `.runtime/` data.
-
-## Required checks for A changes
-
-Run from the repository root:
-
-```bash
-.venv/bin/pytest agent-aa/tests -q
-.venv/bin/agent-aa demo
-```
-
-Regenerate schemas/vectors only when their authoritative models or protocol bytes change:
-
-```bash
-.venv/bin/python scripts/generate-schemas.py
-.venv/bin/python scripts/generate-test-vectors.py
-```
-
-Generated vector private scalars are test-only and must be prominently labeled.
