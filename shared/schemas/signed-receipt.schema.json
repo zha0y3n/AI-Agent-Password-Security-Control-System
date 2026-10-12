@@ -1,0 +1,155 @@
+{
+  "$defs": {
+    "ExecutionReceipt": {
+      "additionalProperties": false,
+      "properties": {
+        "broker_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Broker Id",
+          "type": "string"
+        },
+        "broker_key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Broker Key Id",
+          "type": "string"
+        },
+        "capability_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "credential_epoch": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Credential Epoch",
+          "type": "integer"
+        },
+        "credential_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Credential Id",
+          "type": "string"
+        },
+        "executed_at": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Executed At",
+          "type": "integer"
+        },
+        "outcome": {
+          "enum": [
+            "SUCCESS",
+            "DENIED",
+            "ERROR"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "protocol_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "receipt_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Receipt Id",
+          "type": "string"
+        },
+        "request_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Hash",
+          "type": "string"
+        },
+        "result_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Result Hash",
+          "type": "string"
+        }
+      },
+      "required": [
+        "receipt_id",
+        "broker_id",
+        "broker_key_id",
+        "capability_id",
+        "request_hash",
+        "credential_id",
+        "credential_epoch",
+        "result_hash",
+        "outcome",
+        "executed_at"
+      ],
+      "title": "ExecutionReceipt",
+      "type": "object"
+    },
+    "ProtocolSignature": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "SM2-SM3",
+          "default": "SM2-SM3",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "encoding": {
+          "const": "ASN.1-DER/base64url-nopad",
+          "default": "ASN.1-DER/base64url-nopad",
+          "title": "Encoding",
+          "type": "string"
+        },
+        "key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Key Id",
+          "type": "string"
+        },
+        "sm2_user_id": {
+          "const": "1234567812345678",
+          "default": "1234567812345678",
+          "title": "Sm2 User Id",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 256,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "value"
+      ],
+      "title": "ProtocolSignature",
+      "type": "object"
+    }
+  },
+  "$id": "https://agent-credential-guard.example/schema/signed-receipt.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "body": {
+      "$ref": "#/$defs/ExecutionReceipt"
+    },
+    "signature": {
+      "$ref": "#/$defs/ProtocolSignature"
+    }
+  },
+  "required": [
+    "body",
+    "signature"
+  ],
+  "title": "SignedReceipt",
+  "type": "object"
+}
