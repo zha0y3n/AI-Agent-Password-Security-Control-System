@@ -1,0 +1,213 @@
+{
+  "$defs": {
+    "CapabilityBody": {
+      "additionalProperties": false,
+      "properties": {
+        "agent_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Agent Id",
+          "type": "string"
+        },
+        "agent_key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Agent Key Id",
+          "type": "string"
+        },
+        "audience": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Audience",
+          "type": "string"
+        },
+        "capability_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Capability Id",
+          "type": "string"
+        },
+        "credential_epoch": {
+          "maximum": 2147483647,
+          "minimum": 1,
+          "title": "Credential Epoch",
+          "type": "integer"
+        },
+        "credential_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Credential Id",
+          "type": "string"
+        },
+        "expires_at": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Expires At",
+          "type": "integer"
+        },
+        "issued_at": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Issued At",
+          "type": "integer"
+        },
+        "issuer": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Issuer",
+          "type": "string"
+        },
+        "issuer_key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Issuer Key Id",
+          "type": "string"
+        },
+        "nonce": {
+          "pattern": "^[0-9a-f]{32}$",
+          "title": "Nonce",
+          "type": "string"
+        },
+        "one_time": {
+          "const": true,
+          "default": true,
+          "title": "One Time",
+          "type": "boolean"
+        },
+        "operation": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Operation",
+          "type": "string"
+        },
+        "protocol_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Protocol Version",
+          "type": "string"
+        },
+        "request_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Request Hash",
+          "type": "string"
+        },
+        "resource": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Resource",
+          "type": "string"
+        },
+        "service": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Service",
+          "type": "string"
+        },
+        "task_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Task Id",
+          "type": "string"
+        },
+        "ttl_seconds": {
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Ttl Seconds",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "capability_id",
+        "issuer",
+        "issuer_key_id",
+        "audience",
+        "agent_id",
+        "agent_key_id",
+        "task_id",
+        "service",
+        "resource",
+        "operation",
+        "request_hash",
+        "credential_id",
+        "credential_epoch",
+        "issued_at",
+        "expires_at",
+        "ttl_seconds",
+        "nonce"
+      ],
+      "title": "CapabilityBody",
+      "type": "object"
+    },
+    "ProtocolSignature": {
+      "additionalProperties": false,
+      "properties": {
+        "algorithm": {
+          "const": "SM2-SM3",
+          "default": "SM2-SM3",
+          "title": "Algorithm",
+          "type": "string"
+        },
+        "encoding": {
+          "const": "ASN.1-DER/base64url-nopad",
+          "default": "ASN.1-DER/base64url-nopad",
+          "title": "Encoding",
+          "type": "string"
+        },
+        "key_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+          "title": "Key Id",
+          "type": "string"
+        },
+        "sm2_user_id": {
+          "const": "1234567812345678",
+          "default": "1234567812345678",
+          "title": "Sm2 User Id",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 256,
+          "minLength": 8,
+          "pattern": "^[A-Za-z0-9_-]+$",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_id",
+        "value"
+      ],
+      "title": "ProtocolSignature",
+      "type": "object"
+    }
+  },
+  "$id": "https://agent-credential-guard.example/schema/signed-capability.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "body": {
+      "$ref": "#/$defs/CapabilityBody"
+    },
+    "signature": {
+      "$ref": "#/$defs/ProtocolSignature"
+    }
+  },
+  "required": [
+    "body",
+    "signature"
+  ],
+  "title": "SignedCapability",
+  "type": "object"
+}
