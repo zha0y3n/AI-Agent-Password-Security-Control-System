@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.venv/
+
+# Runtime secrets and local state
+.runtime/
+runtime/
+*.pem
+*.key
+*.p12
+*.pfx
+.env
+.env.*
+!.env.example
+
+# Test/build outputs
+dist/
+build/
+*.log
+security.csv
+performance.csv
+concurrency.csv
+revocation.csv
+prompt_injection.csv
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

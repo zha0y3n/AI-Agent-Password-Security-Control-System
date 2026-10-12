@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=75", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agent-credential-guard-aa"
+version = "0.1.0"
+description = "Agent and Authorization Authority for task-bound SM2 credential capabilities"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "pydantic>=2.11,<3",
+  "tongsuopy==1.0.1",
+  "typer>=0.15,<1",
+  "uvicorn>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8.3,<9",
+]
+
+[project.scripts]
+agent-aa = "agent_aa.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+addopts = "-ra --strict-config --strict-markers"
+testpaths = ["tests"]
