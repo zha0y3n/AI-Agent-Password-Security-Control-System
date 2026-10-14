@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"os"
@@ -11,17 +12,17 @@ import (
 	"strings"
 
 	"github.com/emmansun/gmsm/sm2"
+	"github.com/emmansun/gmsm/smx509"
 )
 
-// DefaultSM2UID 是 GM/T 0009 规定的默认用户标识。
-// 是否与 A 一致待阶段二按 docs/crypto-protocol.md 确认。
-var DefaultSM2UID = []byte("1234567812345678")
+// SM2UserID 是协议固定的 SM2 用户标识（docs/crypto-protocol.md §3.2），
+// 签名与验签都显式传入，不依赖库默认值。
+const SM2UserID = "1234567812345678"
 
 // SM2Signer 持有 SM2 私钥，签名格式为 ASN.1 DER(r, s)，
 // 签名过程包含 Z 值预处理（SM3(Z‖M)）。
 type SM2Signer struct {
 	priv *sm2.PrivateKey
-	uid  []byte
 }
 
 // GenerateSM2Signer 生成新的 SM2 密钥对。
@@ -30,7 +31,7 @@ func GenerateSM2Signer() (*SM2Signer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &SM2Signer{priv: priv, uid: DefaultSM2UID}, nil
+	return &SM2Signer{priv: priv}, nil
 }
 
 // SM2SignerFromHex 从 32 字节私钥的十六进制恢复签名者。
@@ -43,7 +44,7 @@ func SM2SignerFromHex(s string) (*SM2Signer, error) {
 	if err != nil {
 		return nil, fmt.Errorf("sm2: invalid private key: %w", err)
 	}
-	return &SM2Signer{priv: priv, uid: DefaultSM2UID}, nil
+	return &SM2Signer{priv: priv}, nil
 }
 
 // LoadOrCreateSM2Signer 从文件加载私钥；文件不存在时生成新密钥并以 0600 权限写入。
@@ -71,7 +72,7 @@ func LoadOrCreateSM2Signer(path string) (s *SM2Signer, created bool, err error) 
 
 // Sign 对消息 msg 做 SM2 签名（内部计算 SM3(Z‖msg)）。
 func (s *SM2Signer) Sign(msg []byte) ([]byte, error) {
-	return s.priv.SignWithSM2(rand.Reader, s.uid, msg)
+	return s.priv.SignWithSM2(rand.Reader, []byte(SM2UserID), msg)
 }
 
 // PublicKey 返回公钥。
@@ -112,7 +113,37 @@ func ParseSM2PublicKeyHex(s string) (*ecdsa.PublicKey, error) {
 	return ParseSM2PublicKey(raw)
 }
 
-// SM2Verify 用默认 UID 验证 DER 签名。
+// SM2Verify 用协议 UID 验证 DER 签名。
 func SM2Verify(pub *ecdsa.PublicKey, msg, sig []byte) bool {
-	return sm2.VerifyASN1WithSM2(pub, DefaultSM2UID, msg, sig)
+	return sm2.VerifyASN1WithSM2(pub, []byte(SM2UserID), msg, sig)
+}
+
+// ParseSM2PublicKeyPEM 解析 PEM SubjectPublicKeyInfo 格式的 SM2 公钥（A 的密钥注册表格式）。
+// 只接受恰好一个 PUBLIC KEY 块，且曲线必须是 SM2。
+func ParseSM2PublicKeyPEM(data string) (*ecdsa.PublicKey, error) {
+	block, rest := pem.Decode([]byte(data))
+	if block == nil || block.Type != "PUBLIC KEY" || len(block.Headers) != 0 {
+		return nil, errors.New("sm2: expected a single PEM PUBLIC KEY block")
+	}
+	if strings.TrimSpace(string(rest)) != "" {
+		return nil, errors.New("sm2: unexpected data after PEM block")
+	}
+	parsed, err := smx509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("sm2: invalid SubjectPublicKeyInfo: %w", err)
+	}
+	pub, ok := parsed.(*ecdsa.PublicKey)
+	if !ok || pub.Curve != sm2.P256() {
+		return nil, errors.New("sm2: public key is not on the SM2 curve")
+	}
+	return pub, nil
+}
+
+// MarshalSM2PublicKeyPEM 把 SM2 公钥编码为 PEM SubjectPublicKeyInfo。
+func MarshalSM2PublicKeyPEM(pub *ecdsa.PublicKey) (string, error) {
+	der, err := smx509.MarshalPKIXPublicKey(pub)
+	if err != nil {
+		return "", err
+	}
+	return string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})), nil
 }

@@ -24,10 +24,11 @@ CREATE TABLE IF NOT EXISTS capabilities (
     updated_at        INTEGER NOT NULL
 );
 
--- Broker Challenge：单次使用，带过期时间。
+-- Broker Challenge：单次使用，带过期时间，绑定 agent 与 audience（本 Broker 的 broker_id）。
 CREATE TABLE IF NOT EXISTS challenges (
     challenge   TEXT PRIMARY KEY,
     agent_id    TEXT    NOT NULL,
+    audience    TEXT    NOT NULL DEFAULT '',
     expires_at  INTEGER NOT NULL,
     used        INTEGER NOT NULL DEFAULT 0,
     created_at  INTEGER NOT NULL
