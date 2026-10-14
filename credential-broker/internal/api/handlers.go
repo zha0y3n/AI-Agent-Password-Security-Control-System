@@ -25,7 +25,7 @@ func (s *Server) publicKey(w http.ResponseWriter, r *http.Request) {
 		"broker_id":  s.BrokerID,
 		"algorithm":  "SM2",
 		"encoding":   "uncompressed-hex(04||X||Y)",
-		"uid":        string(crypto.DefaultSM2UID),
+		"uid":        crypto.SM2UserID,
 		"signature":  "ASN.1 DER(r,s)",
 		"public_key": s.Signer.PublicKeyHex(),
 	})
