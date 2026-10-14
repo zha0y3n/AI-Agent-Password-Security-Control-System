@@ -20,6 +20,7 @@ import (
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/execution"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/metrics"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/protocol"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/receipt"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/secret"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/testenv"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/upstream"
@@ -29,18 +30,20 @@ import (
 var ctx = context.Background()
 
 const (
-	brokerID = "broker-01"
-	issuerID = "aa-01"
-	aaKeyID  = "aa-key-01"
-	agentID  = "agent-01"
-	agentKey = "agent-key-01"
-	credID   = "github-prod"
+	brokerID  = "broker-01"
+	issuerID  = "aa-01"
+	aaKeyID   = "aa-key-01"
+	agentID   = "agent-01"
+	agentKey  = "agent-key-01"
+	credID    = "github-prod"
+	brokerKey = "broker-key-01"
 )
 
 type fixture struct {
 	t          *testing.T
 	env        *testenv.Env
 	aa, agent  *crypto.SM2Signer
+	broker     *crypto.SM2Signer
 	challenges *challenge.Service
 	mock       *upstream.Mock
 	client     *upstream.Client
@@ -65,6 +68,9 @@ func newFixture(t *testing.T, agentKeyOpts ...keyOpt) *fixture {
 		t.Fatal(err)
 	}
 	if f.agent, err = crypto.GenerateSM2Signer(); err != nil {
+		t.Fatal(err)
+	}
+	if f.broker, err = crypto.GenerateSM2Signer(); err != nil {
 		t.Fatal(err)
 	}
 	agentRec := f.keyRecord(agentKey, agentID, protocol.KeyPurposeHolderProof, f.agent)
@@ -96,6 +102,7 @@ func newFixture(t *testing.T, agentKeyOpts ...keyOpt) *fixture {
 		Upstream:    f.client,
 		Audit:       env.Auditor,
 		Metrics:     m,
+		Receipts:    &receipt.Issuer{BrokerID: brokerID, KeyID: brokerKey, Signer: f.broker},
 	}
 	return f
 }
@@ -379,6 +386,17 @@ func TestExecuteDenials(t *testing.T) {
 			}
 			if out.CredentialLoaded || f.client.Calls() != 0 {
 				t.Fatalf("denied request touched credential=%v upstream calls=%d", out.CredentialLoaded, f.client.Calls())
+			}
+			// Capability 验签通过之前的拒绝不签回执（字段可能是伪造的）；之后的拒绝签 DENIED 回执。
+			if c.step == "schema" || c.step == "capability_signature" {
+				if out.Receipt != nil {
+					t.Fatalf("receipt issued for unauthenticated capability: %s", out.Receipt)
+				}
+				return
+			}
+			r, env := f.verifyReceipt(out)
+			if r.Body.Outcome != receipt.OutcomeDenied || env["code"] != c.code || env["upstream_status"] != nil {
+				t.Fatalf("denial receipt outcome=%s envelope=%v", r.Body.Outcome, env)
 			}
 		})
 	}

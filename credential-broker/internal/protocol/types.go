@@ -429,6 +429,21 @@ func (r *SignedReceipt) Value() map[string]any {
 	return map[string]any{"body": r.Body.Value(), "signature": r.Signature.value()}
 }
 
+func decodeSignedReceipt(v any, path string) (*SignedReceipt, *Error) {
+	o, err := newObject(v, path)
+	if err != nil {
+		return nil, err
+	}
+	r := &SignedReceipt{
+		Body:      sub(o, "body", decodeExecutionReceipt),
+		Signature: sub(o, "signature", decodeSignature),
+	}
+	if err := o.done(); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
 // ExecutionBundle 是 Agent 发给 Broker 的执行请求。
 type ExecutionBundle struct {
 	Request     *AgentRequest
@@ -487,3 +502,8 @@ func DecodeHolderProofBody(v any) (*HolderProofBody, *Error)   { return decodeHo
 func DecodeHolderProof(v any) (*HolderProof, *Error)           { return decodeHolderProof(v, "$") }
 func DecodeExecutionReceipt(v any) (*ExecutionReceipt, *Error) { return decodeExecutionReceipt(v, "$") }
 func DecodeSignature(v any) (ProtocolSignature, *Error)        { return decodeSignature(v, "$") }
+
+// ParseSignedReceipt 严格解析 SignedReceipt（供测试与 C 侧工具复核 Broker 回执）。
+func ParseSignedReceipt(data []byte) (*SignedReceipt, *Error) {
+	return parse(data, decodeSignedReceipt)
+}

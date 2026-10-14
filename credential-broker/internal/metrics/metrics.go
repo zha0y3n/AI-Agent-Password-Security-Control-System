@@ -12,6 +12,7 @@ const (
 	StageConsume  = "atomic_consume"
 	StageDecrypt  = "credential_decrypt"
 	StageUpstream = "upstream"
+	StageReceipt  = "receipt_sign"
 	StageTotal    = "total"
 )
 

@@ -24,6 +24,19 @@ type Config struct {
 	UpstreamURL     string
 	UpstreamTimeout time.Duration
 	LogLevel        string
+
+	// Receipt 签名密钥的标识与有效期（对外公布为 A 格式的 PublicKeyRecord）。
+	KeyID       string
+	KeyValidity time.Duration
+
+	// 执行接口：可信 AA 的 issuer 与 AA / Agent 公钥表（A 的 public-keys.json 格式）。
+	// 两者都未配置时 POST /v1/execute 返回 503（fail closed）。
+	TrustedIssuer   string
+	KeyRegistryPath string
+	ClockSkew       time.Duration
+
+	// EnableReset 开放 POST /v1/admin/reset，只用于开发 / 实验环境。
+	EnableReset bool
 }
 
 // Load 读取并校验配置。
@@ -36,6 +49,10 @@ func Load() (*Config, error) {
 		AdminToken:     os.Getenv("BROKER_ADMIN_TOKEN"),
 		UpstreamURL:    env("BROKER_UPSTREAM_URL", "http://127.0.0.1:9090"),
 		LogLevel:       env("BROKER_LOG_LEVEL", "info"),
+		KeyID:          env("BROKER_KEY_ID", "broker-key-01"),
+
+		TrustedIssuer:   os.Getenv("BROKER_TRUSTED_ISSUER"),
+		KeyRegistryPath: os.Getenv("BROKER_KEY_REGISTRY"),
 	}
 	var err error
 	if c.VaultKey, err = hex.DecodeString(os.Getenv("BROKER_VAULT_KEY")); err != nil || len(c.VaultKey) != crypto.SM4KeySize {
@@ -52,6 +69,22 @@ func Load() (*Config, error) {
 	}
 	if c.CheckpointEvery, err = integer("BROKER_CHECKPOINT_EVERY", 100); err != nil {
 		return nil, err
+	}
+	if c.KeyValidity, err = duration("BROKER_KEY_VALIDITY", 365*24*time.Hour); err != nil {
+		return nil, err
+	}
+	if c.ClockSkew, err = duration("BROKER_CLOCK_SKEW", 5*time.Second); err != nil {
+		return nil, err
+	}
+	if (c.TrustedIssuer == "") != (c.KeyRegistryPath == "") {
+		return nil, fmt.Errorf("BROKER_TRUSTED_ISSUER and BROKER_KEY_REGISTRY must be set together")
+	}
+	switch v := os.Getenv("BROKER_ENABLE_RESET"); v {
+	case "", "0", "false":
+	case "1", "true":
+		c.EnableReset = true
+	default:
+		return nil, fmt.Errorf("BROKER_ENABLE_RESET: invalid boolean %q", v)
 	}
 	return c, nil
 }

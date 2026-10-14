@@ -31,6 +31,35 @@ const (
 	CapabilityFailed        = "CAPABILITY_ALREADY_FAILED"
 
 	// 上游
-	UpstreamError        = "UPSTREAM_ERROR"
+	UpstreamError        = "UPSTREAM_ERROR"        // 上游不可达或 5xx，Capability -> FAILED
+	UpstreamRejected     = "UPSTREAM_REJECTED"     // 上游已处理但返回 3xx/4xx（回执 outcome=ERROR，Capability 仍为 CONSUMED）
 	UnsupportedOperation = "UNSUPPORTED_OPERATION" // AgentRequest 无法映射为受支持的上游调用
 )
+
+// 执行接口
+const (
+	ExecutionDisabled = "EXECUTION_DISABLED" // 未配置可信 issuer / 公钥表
+	ResetDisabled     = "RESET_DISABLED"     // 未开启 BROKER_ENABLE_RESET
+)
+
+// ExecuteStatus 把 POST /v1/execute 的拒绝码映射为 HTTP 状态码：
+//
+//	400 请求本身不是合法的 Execution Bundle
+//	409 与同一 Capability 的并发 / 先前执行冲突
+//	502 赢得执行权后上游失败
+//	500 Broker 内部故障
+//	403 其余全部拒绝（签名、时间、绑定、Challenge、Credential 生命周期……）
+func ExecuteStatus(code string) int {
+	switch code {
+	case "CANONICALIZATION_ERROR", "SCHEMA_VALIDATION_FAILED":
+		return 400
+	case ReplayInProgress, IdempotencyConflict, CapabilityClaimMismatch:
+		return 409
+	case UpstreamError:
+		return 502
+	case Internal:
+		return 500
+	default:
+		return 403
+	}
+}
