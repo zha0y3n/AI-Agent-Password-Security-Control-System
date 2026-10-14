@@ -2,16 +2,16 @@
 
 目标：AI Agent 即使被 Prompt Injection 等手段诱导，也无法绕过密码授权边界，用长期 Credential 产生超出授权范围的真实业务副作用。Agent 只持有一次性、强绑定的 Capability，从不接触目标服务的长期 Credential。
 
-## 当前完成度（2026-10-12）
+## 当前完成度（2026-10-14）
 
-| 模块                    | 负责  | 状态                                        | 验证                                                         |
-| ----------------------- | ----- | ------------------------------------------- | ------------------------------------------------------------ |
-| A：Agent + AA（Python） | A     | 《111》第 1～6 周期 A 端交付已完成          | `pytest agent-aa/tests`：39 passed；`agent-aa demo` 闭环通过 |
-| B：Broker + Vault（Go） | B     | 阶段一（1.1～1.12）已完成；阶段二～五未开始 | `go test ./...` 通过                                         |
-| C：评测 + Dashboard     | C     | 早期：仅覆盖 AA 签发/验签接口               | 脚本需先启动 AA                                              |
-| 全链路                  | A+B+C | **未打通**：Broker 尚无 `POST /v1/execute`  | —                                                            |
+| 模块                    | 负责  | 状态                                                                 | 验证                                                                  |
+| ----------------------- | ----- | -------------------------------------------------------------------- | --------------------------------------------------------------------- |
+| A：Agent + AA（Python） | A     | 《111》第 1～6 周期 A 端交付已完成；验签 500 缺陷待修                | `pytest agent-aa/tests`：39 passed；`agent-aa demo` 闭环通过          |
+| B：Broker + Vault（Go） | B     | 阶段一完成；阶段二核心完成，仅剩 `/v1/execute` 与 Receipt 签发；阶段三～五未开始 | `go test ./...` 通过；`make interop` 通过                             |
+| C：评测 + Dashboard     | C     | 早期：覆盖 AA 签发/验签接口、Broker Credential 生命周期接口          | 脚本需先启动 AA / Broker                                              |
+| 全链路                  | A+B+C | **进程内已打通，HTTP 未打通**：Broker 尚无 `POST /v1/execute`        | `make interop`                                                        |
 
-**整体约 40%。** A 签发的 Capability 目前只能由 A 的 Python 参考校验器验证，还不能在 Broker 处兑现为真实执行。
+**整体约 55%。** A 签发的 Execution Bundle 已能被 Go Broker 在测试进程内完整校验并执行（Vault 解密 → Mock 上游），篡改与重放被拒绝；但还没有对外 HTTP 执行接口，也不签发 Receipt，C 无法做端到端系统实验。
 
 ### A 已实现
 
@@ -23,26 +23,46 @@
 - ExecutionReceipt 结构与验签参考实现
 - FastAPI、CLI、JSON Schema、跨语言测试向量
 
-### B 已实现（阶段一）
+### B 已实现
 
-国密封装（SM3/SM4-GCM/SM2）、SQLite 数据层、SM4-GCM Vault（AAD 绑定 id/provider/epoch）、Credential 生命周期与 Epoch、原子消费（CAS）、幂等、Mock Git/DB 上游、SM3 哈希链审计 + SM2 检查点、Challenge、性能埋点、Dockerfile。详见 [docs/b-progress.md](docs/b-progress.md)。
+**阶段一**：国密封装（SM3/SM4-GCM/SM2）、SQLite 数据层、SM4-GCM Vault（AAD 绑定 id/provider/epoch）、Credential 生命周期与 Epoch、原子消费（CAS）、幂等、Mock Git/DB 上游、SM3 哈希链审计 + SM2 检查点、Challenge、性能埋点、Dockerfile。
+
+**阶段二（10-13 新增）**：
+
+- Go `ZTCANON-JSON-v1` 严格解析与编码，与 A 的 `canonical_hex` 向量逐字节一致
+- 协议对象与 Request Hash，镜像 `agent_aa.models` 的约束，拒绝未知字段
+- SM2 域分离验签（显式 UID、DER/base64url、PEM SPKI），`shared/test-vectors` 中 Capability / Holder Proof / Receipt 三组向量全部通过，篡改版本全部失败
+- 可信公钥表，直接读取 A 的 `public-keys.json`
+- Challenge 改为 32 字节小写十六进制并绑定 Broker Audience
+- 完整校验流水线：schema → Capability 签名 → 时间/Audience → 请求绑定与哈希 → Holder Proof → 执行计划 → Challenge 消费 → 同事务 Credential 状态/Epoch 检查 + CAS
+- AgentRequest → Mock Git/DB 调用的精确映射
+- 测试覆盖 23 类拒绝（断言停在预期步骤、未读 Credential、未调上游）、重放、幂等、20 路并发重放副作用恰好一次
+
+详见 [docs/b-progress.md](docs/b-progress.md)。
 
 ### C 已实现
 
-AA 签发接口攻击用例（`tests/test_aa_issue.py`、`scripts/run_security_tests.py`）、AA 验签接口攻击用例（`scripts/run_verify_tests.py`）、探测脚本，以及读取 `results/*.csv` 的 Streamlit Dashboard 雏形。
+- AA 签发接口攻击用例（`tests/test_aa_issue.py`、`scripts/run_security_tests.py`）
+- AA 验签接口攻击用例（`scripts/run_verify_tests.py`）
+- Broker Credential 生命周期用例（`scripts/run_credential_lifecycle_tests.py`，输出 `credential_lifecycle.csv`）
+- 探测脚本，以及读取 `results/*.csv` 的 Streamlit Dashboard 雏形
 
 ### 已知问题
 
-- **AA 验签 500**：签名值被篡改成非法 DER（如前缀改为 `AAAA`）时，`/v1/capabilities/verify` 返回 500，而不是 401 `INVALID_SIGNATURE`。请求仍被拒绝，但违反了“失败即明确拒绝”的约定。由 C 在 `a2d7a6c` 中发现；根因是 `agent-aa/src/agent_aa/crypto.py` 的 `verify_sm2` 未捕获 tongsuopy 的 `InternalError`。待 A 修复。
+- **AA 验签 500（未修复）**：签名值被篡改成非法 DER（如前缀改为 `AAAA`）时，`/v1/capabilities/verify` 返回 500，而不是 401 `INVALID_SIGNATURE`。请求仍被拒绝，但违反了“失败即明确拒绝”的约定。由 C 在 `a2d7a6c` 中发现；根因是 `agent-aa/src/agent_aa/crypto.py` 的 `verify_sm2` 只捕获 `InvalidSignature`/`ValueError`，未捕获 tongsuopy 的 `InternalError`。
+- **Credential Epoch 来源不一致**：A 的可信任务库把 Epoch 写死为 17，Broker 新建 Credential 从 1 开始；`make interop` 暂时通过轮换把测试 Credential 推到 17。
+- **Broker 公钥编码不一致**：`/v1/broker/public-key` 以 `04‖X‖Y` 十六进制公布，A 的 `ReceiptVerifier` 需要 PEM SPKI。
+- `run_credential_lifecycle_tests.py` 在源码中硬编码了 `ADMIN_TOKEN`，违反“不提交 token”的约定，且必须与本机 `.env` 中的 `BROKER_ADMIN_TOKEN` 手动保持一致；应改为从环境变量读取。
 - C 的脚本依赖 `requests`、`streamlit`、`pandas`，尚未声明在任何依赖文件中。
 
 ## 待办（按依赖顺序）
 
-1. **A+B 协议对齐**：完成 [docs/b-plan.md](docs/b-plan.md) §2.1 清单（签名/公钥编码、SM2 ID、签名输入、Challenge 格式、错误码、Receipt 返回方式）。
-2. **B 阶段二**：Go Canonical JSON 与 Request Hash；Go 验证 `shared/test-vectors/sm2-sm3-v1.json` 三组向量；填充 `internal/verifier` 校验步骤；实现 `POST /v1/execute`（校验 → 消费 → Vault 解密 → Mock API → Receipt → 审计）。
-3. **A+B 联调**：Agent → AA → Capability → Challenge → Holder Proof → Broker → Vault → Mock API → Receipt → Audit，并逐条验证攻击样例被拒绝。
-4. **B 阶段四**：`docker-compose.yml`（AA + Broker + Mock + Dashboard）、重置脚本、种子数据。
-5. **C 系统实验**：旧 Epoch、撤销、重放、并发重放、撤销竞态、提示注入、性能；输出 `security.csv`、`performance.csv`、`concurrency.csv`、`revocation.csv`、`prompt_injection.csv`，并检查实际副作用而不只是 HTTP 状态码。
+1. **A 修复验签 500**：`verify_sm2` 对任何底层验签异常都返回 `INVALID_SIGNATURE`，并补回归测试。
+2. **A+B 剩余对齐**（[docs/b-plan.md](docs/b-plan.md) §2.1）：签名编码、SM2 ID、签名输入、Challenge 格式已由 B 按 A 的协议实现并通过向量；仍需确定 Credential Epoch 获取方式（建议 AA 读 `GET /v1/credentials/{id}/status`）、Broker 公钥编码、统一错误码表、`result_envelope` 结构与 Receipt 返回方式。
+3. **B 阶段二收尾**：实现 `POST /v1/execute`（校验 → 消费 → Vault 解密 → Mock API → Receipt → 审计），签发的 Receipt 需通过 A 的 `receipt.py` 验签。
+4. **A+B HTTP 联调**：Agent → AA → Capability → Challenge → Holder Proof → Broker → Vault → Mock API → Receipt → Audit，并逐条验证攻击样例被拒绝。
+5. **B 阶段四**：`docker-compose.yml`（AA + Broker + Mock + Dashboard）、重置脚本、种子数据。
+6. **C 系统实验**：旧 Epoch、撤销、重放、并发重放、撤销竞态、提示注入、性能；输出 `security.csv`、`performance.csv`、`concurrency.csv`、`revocation.csv`、`prompt_injection.csv`，并检查实际副作用而不只是 HTTP 状态码。
 
 ## 目录
 
@@ -104,13 +124,14 @@ cp .env.example .env   # 填写 BROKER_VAULT_KEY（openssl rand -hex 16）和 BR
 set -a; . ./.env; set +a
 make run-mock       # Mock Git/DB 上游，:9090
 make run            # Broker，:8080
+make interop        # 跨语言联调：A 的 Python 代码签发 bundle，Go Broker 进程内完整校验并执行
 ```
 
 当前 HTTP 接口包括健康检查、Broker 公钥、Challenge、Credential 状态与生命周期管理、审计记录与检查点、Metrics，完整列表见 [docs/b-progress.md](docs/b-progress.md)。**执行接口 `/v1/execute` 尚未实现。**
 
 ## C：评测
 
-先启动 AA（`bash scripts/run-a.sh`），然后：
+先启动 AA（`bash scripts/run-a.sh`）；生命周期用例还需启动 Broker（见上节）。然后：
 
 ```bash
 .venv/bin/pip install requests pandas streamlit
@@ -118,6 +139,7 @@ mkdir -p evaluation-dashboard/results
 .venv/bin/pytest evaluation-dashboard/tests -q
 .venv/bin/python evaluation-dashboard/scripts/run_security_tests.py
 .venv/bin/python evaluation-dashboard/scripts/run_verify_tests.py
+.venv/bin/python evaluation-dashboard/scripts/run_credential_lifecycle_tests.py   # 需先启动 Broker（:8080），且 ADMIN_TOKEN 与 .env 一致
 .venv/bin/streamlit run evaluation-dashboard/dashboard/app.py
 ```
 
