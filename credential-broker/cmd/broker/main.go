@@ -4,6 +4,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -12,15 +13,21 @@ import (
 	"time"
 
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/api"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/capability"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/challenge"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/config"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/credential"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/crypto"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/evidence"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/execution"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/logging"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/metrics"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/protocol"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/receipt"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/repository"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/upstream"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/vault"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/verifier"
 )
 
 func main() {
@@ -54,18 +61,57 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	notBefore, err := keyNotBefore(cfg.SigningKeyFile)
+	if err != nil {
+		return err
+	}
 	auditor := evidence.NewAuditor(db, signer, cfg.CheckpointEvery)
 	challenges := challenge.NewService(db, cfg.ChallengeTTL, cfg.BrokerID)
+	credentials := credential.NewService(db, v, auditor)
+	m := metrics.New()
 
 	srv := &api.Server{
-		BrokerID:    cfg.BrokerID,
-		AdminToken:  cfg.AdminToken,
-		Credentials: credential.NewService(db, v, auditor),
-		Challenges:  challenges,
-		Auditor:     auditor,
-		Signer:      signer,
-		Metrics:     metrics.New(),
-		Log:         log,
+		BrokerID:     cfg.BrokerID,
+		AdminToken:   cfg.AdminToken,
+		Credentials:  credentials,
+		Challenges:   challenges,
+		Auditor:      auditor,
+		Signer:       signer,
+		Metrics:      m,
+		Log:          log,
+		KeyID:        cfg.KeyID,
+		KeyNotBefore: notBefore,
+		KeyNotAfter:  notBefore + int64(cfg.KeyValidity/time.Second),
+	}
+	if cfg.KeyRegistryPath != "" {
+		keys, err := protocol.LoadKeyRegistry(cfg.KeyRegistryPath)
+		if err != nil {
+			return fmt.Errorf("load BROKER_KEY_REGISTRY: %w", err)
+		}
+		store := capability.NewStore(db, auditor)
+		srv.Capabilities = store
+		srv.Executor = &execution.Executor{
+			Pipeline: verifier.New(m, verifier.Steps(verifier.Config{
+				BrokerID:      cfg.BrokerID,
+				TrustedIssuer: cfg.TrustedIssuer,
+				Keys:          keys,
+				Challenges:    challenges,
+				ClockSkew:     cfg.ClockSkew,
+			})...),
+			Store:       store,
+			Credentials: credentials,
+			Upstream:    upstream.NewClient(cfg.UpstreamURL, cfg.UpstreamTimeout),
+			Audit:       auditor,
+			Metrics:     m,
+			Receipts:    &receipt.Issuer{BrokerID: cfg.BrokerID, KeyID: cfg.KeyID, Signer: signer},
+		}
+		log.Info("execution enabled", "trusted_issuer", cfg.TrustedIssuer, "trusted_keys", keys.Len(), "upstream", cfg.UpstreamURL)
+	} else {
+		log.Warn("BROKER_KEY_REGISTRY not set: POST /v1/execute is disabled")
+	}
+	if cfg.EnableReset {
+		srv.ResetDB = db
+		log.Warn("BROKER_ENABLE_RESET is on: POST /v1/admin/reset wipes all broker state (dev / experiments only)")
 	}
 	httpSrv := &http.Server{
 		Addr:              cfg.Addr,
@@ -97,6 +143,16 @@ func run() error {
 		return err
 	}
 	return nil
+}
+
+// keyNotBefore 以签名密钥文件的修改时间（减 60 秒容差）作为公钥记录的 not_before，
+// 使重启后之前签发的回执仍落在有效期内。
+func keyNotBefore(path string) (int64, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return 0, err
+	}
+	return min(st.ModTime().Unix(), time.Now().Unix()) - 60, nil
 }
 
 // purgeChallenges 定期清理过期 Challenge。

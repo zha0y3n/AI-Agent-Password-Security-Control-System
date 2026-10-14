@@ -108,3 +108,19 @@ func (db *DB) WithTx(ctx context.Context, fn func(tx *sql.Tx) error) (err error)
 	}
 	return tx.Commit()
 }
+
+// resetTables 是 Reset 清空的表，顺序无依赖关系。
+var resetTables = []string{"capabilities", "challenges", "credentials", "audit_log", "checkpoints"}
+
+// Reset 在单个事务中清空全部业务表（Credential、Capability、Challenge、审计链与检查点）。
+// 仅用于开发 / 实验环境让每轮实验从干净状态开始；生产环境不得开放。
+func (db *DB) Reset(ctx context.Context) error {
+	return db.WithTx(ctx, func(tx *sql.Tx) error {
+		for _, t := range resetTables {
+			if _, err := tx.ExecContext(ctx, "DELETE FROM "+t); err != nil {
+				return fmt.Errorf("reset %s: %w", t, err)
+			}
+		}
+		return nil
+	})
+}
