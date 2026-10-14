@@ -1,4 +1,4 @@
-.PHONY: build test test-race vet fmt run run-mock docker clean
+.PHONY: build test test-race vet fmt run run-mock docker clean interop
 
 BIN := bin
 
@@ -13,6 +13,15 @@ test-race:
 
 vet:
 	go vet ./...
+
+# 跨语言联调：用 A 的 Python 代码签发 bundle，再由 Go Broker 完整执行。
+# 需要先在仓库根目录安装 A（bash scripts/bootstrap.sh）。临时目录含测试私钥，结束后删除。
+PYTHON ?= ../.venv/bin/python
+interop:
+	@dir=$$(mktemp -d) && trap 'rm -rf "$$dir"' EXIT && \
+	$(PYTHON) scripts/gen-a-bundle.py "$$dir" && \
+	BROKER_TEST_A_INTEROP_DIR="$$dir" BROKER_TEST_A_KEYS="$$dir/public-keys.json" \
+	go test -count=1 -run 'Interop|ARuntime' -v ./internal/verifier/ ./internal/protocol/
 
 fmt:
 	gofmt -w .

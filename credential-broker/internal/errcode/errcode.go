@@ -1,5 +1,5 @@
 // Package errcode 定义 Broker 对外的错误 / 拒绝码。
-// 当前为 B 侧草案，阶段二与 A 的 errors.py 统一。
+// 协议校验类拒绝码沿用 A 的 errors.py（见 internal/protocol），这里是 B 扩展的执行 / 生命周期 / 重放类拒绝码。
 package errcode
 
 const (
@@ -11,10 +11,11 @@ const (
 	Internal     = "INTERNAL_ERROR"
 
 	// Challenge
-	ChallengeUnknown    = "CHALLENGE_UNKNOWN"
-	ChallengeUsed       = "CHALLENGE_USED"
-	ChallengeExpired    = "CHALLENGE_EXPIRED"
-	ChallengeWrongAgent = "CHALLENGE_WRONG_AGENT"
+	ChallengeUnknown       = "CHALLENGE_UNKNOWN"
+	ChallengeUsed          = "CHALLENGE_USED"
+	ChallengeExpired       = "CHALLENGE_EXPIRED"
+	ChallengeWrongAgent    = "CHALLENGE_WRONG_AGENT"
+	ChallengeWrongAudience = "CHALLENGE_WRONG_AUDIENCE"
 
 	// Credential
 	CredentialNotFound      = "CREDENTIAL_NOT_FOUND"
@@ -30,5 +31,6 @@ const (
 	CapabilityFailed        = "CAPABILITY_ALREADY_FAILED"
 
 	// 上游
-	UpstreamError = "UPSTREAM_ERROR"
+	UpstreamError        = "UPSTREAM_ERROR"
+	UnsupportedOperation = "UNSUPPORTED_OPERATION" // AgentRequest 无法映射为受支持的上游调用
 )

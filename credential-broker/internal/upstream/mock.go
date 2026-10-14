@@ -59,8 +59,9 @@ func (m *Mock) Reset() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.repos = map[string]map[string]string{
-		"repo-A":       {"README.md": "# repo-A\npublic project readme\n"},
-		"private-repo": {"secret.txt": "internal roadmap\n"},
+		"repo-A":         {"README.md": "# repo-A\npublic project readme\n"},
+		"private-repo":   {"secret.txt": "internal roadmap\n"},
+		"course-project": {"README.md": "# course-project\nA demo task target\n"}, // A 的 demo 任务
 	}
 	m.dbs = map[string]map[string]string{
 		"app-db": {"user:1": "alice", "user:2": "bob"},
