@@ -20,15 +20,29 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "broker_id": s.BrokerID})
 }
 
+// publicKey 公布 Broker 的 SM2 公钥：public_key 为 04‖X‖Y 十六进制（审计检查点使用），
+// public_key_pem 为 SubjectPublicKeyInfo，key_record 为 A 的 PublicKeyRecord（Receipt 验签使用）。
 func (s *Server) publicKey(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]string{
-		"broker_id":  s.BrokerID,
-		"algorithm":  "SM2",
-		"encoding":   "uncompressed-hex(04||X||Y)",
-		"uid":        crypto.SM2UserID,
-		"signature":  "ASN.1 DER(r,s)",
-		"public_key": s.Signer.PublicKeyHex(),
+	rec, err := s.keyRecord()
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"broker_id":      s.BrokerID,
+		"key_id":         s.KeyID,
+		"algorithm":      "SM2",
+		"encoding":       "uncompressed-hex(04||X||Y)",
+		"uid":            crypto.SM2UserID,
+		"signature":      "ASN.1 DER(r,s)",
+		"public_key":     s.Signer.PublicKeyHex(),
+		"public_key_pem": rec["public_key_pem"],
+		"key_record":     rec,
 	})
+}
+
+func (s *Server) publicKeyPEM() (string, error) {
+	return crypto.MarshalSM2PublicKeyPEM(s.Signer.PublicKey())
 }
 
 // ---- Challenge ----
