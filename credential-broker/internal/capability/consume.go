@@ -187,3 +187,30 @@ func (s *Store) State(ctx context.Context, capID string) (State, error) {
 	err := s.db.QueryRowContext(ctx, `SELECT state FROM capabilities WHERE cap_id = ?`, capID).Scan(&st)
 	return st, err
 }
+
+// Info 是 Capability 消费记录的元数据，供管理接口与实验查询（不含执行结果）。
+type Info struct {
+	CapID           string `json:"capability_id"`
+	State           State  `json:"state"`
+	RequestHash     string `json:"request_hash"`
+	CredentialID    string `json:"credential_id"`
+	CredentialEpoch int64  `json:"credential_epoch"`
+	ErrorCode       string `json:"error_code,omitempty"`
+	CreatedAt       int64  `json:"created_at"`
+	UpdatedAt       int64  `json:"updated_at"`
+}
+
+// Get 返回 Capability 消费记录（不存在时返回 sql.ErrNoRows）。
+func (s *Store) Get(ctx context.Context, capID string) (*Info, error) {
+	var in Info
+	var code sql.NullString
+	err := s.db.QueryRowContext(ctx, `
+		SELECT cap_id, state, request_hash, credential_id, credential_epoch, error_code, created_at, updated_at
+		FROM capabilities WHERE cap_id = ?`, capID).
+		Scan(&in.CapID, &in.State, &in.RequestHash, &in.CredentialID, &in.CredentialEpoch, &code, &in.CreatedAt, &in.UpdatedAt)
+	if err != nil {
+		return nil, err
+	}
+	in.ErrorCode = code.String
+	return &in, nil
+}

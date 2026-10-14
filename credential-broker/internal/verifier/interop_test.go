@@ -11,10 +11,12 @@ import (
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/canonical"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/capability"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/challenge"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/crypto"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/errcode"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/execution"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/metrics"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/protocol"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/receipt"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/secret"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/testenv"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/upstream"
@@ -23,6 +25,8 @@ import (
 
 // TestInteropWithPythonAA 用 A 的真实 Python 代码签发的 bundle 走完整 Broker 执行路径。
 // 由 `make interop` 生成数据并设置 BROKER_TEST_A_INTEROP_DIR；未设置时跳过。
+// 执行成功后把 Broker 签发的回执、result_envelope 与 Broker 公钥记录写回该目录，
+// 由 scripts/verify-a-receipt.py 用 A 的 ReceiptVerifier 复核。
 func TestInteropWithPythonAA(t *testing.T) {
 	dir := os.Getenv("BROKER_TEST_A_INTEROP_DIR")
 	if dir == "" {
@@ -81,6 +85,7 @@ func TestInteropWithPythonAA(t *testing.T) {
 		})...),
 		Store: capability.NewStore(env.DB, env.Auditor), Credentials: env.Credentials,
 		Upstream: client, Audit: env.Auditor, Metrics: m,
+		Receipts: &receipt.Issuer{BrokerID: capb.Audience, KeyID: "broker-key-01", Signer: env.Signer},
 	}
 	run := func(body []byte) *execution.Outcome {
 		out, err := exec.Execute(ctx, &verifier.Input{Body: body, Now: time.Now()})
@@ -106,5 +111,26 @@ func TestInteropWithPythonAA(t *testing.T) {
 	}
 	if client.Calls() != 1 {
 		t.Fatalf("upstream calls = %d", client.Calls())
+	}
+
+	pemKey, err := crypto.MarshalSM2PublicKeyPEM(env.Signer.PublicKey())
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().Unix()
+	keys, err := canonical.Marshal(map[string]any{"protocol_version": "1.0", "keys": []any{map[string]any{
+		"key_id": "broker-key-01", "subject_id": capb.Audience, "purpose": protocol.KeyPurposeReceipt,
+		"algorithm": "SM2", "status": "ACTIVE", "public_key_pem": pemKey,
+		"not_before": now - 60, "not_after": now + 3600,
+	}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, data := range map[string][]byte{
+		"receipt.json": out.Receipt, "result_envelope.json": out.ResultEnvelope, "broker-keys.json": keys,
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), data, 0o600); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

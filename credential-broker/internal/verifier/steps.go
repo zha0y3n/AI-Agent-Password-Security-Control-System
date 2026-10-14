@@ -37,7 +37,7 @@ func Steps(cfg Config) []Step {
 	}
 	return []Step{
 		StepFunc{"schema", cfg.schema},
-		StepFunc{"capability_signature", cfg.capabilitySignature},
+		StepFunc{StepCapabilitySignature, cfg.capabilitySignature},
 		StepFunc{"capability_validity", cfg.capabilityValidity},
 		StepFunc{"request_binding", cfg.requestBinding},
 		StepFunc{"holder_proof", cfg.holderProof},
@@ -45,6 +45,9 @@ func Steps(cfg Config) []Step {
 		StepFunc{"challenge", cfg.challenge},
 	}
 }
+
+// StepCapabilitySignature 之后 Capability 字段可信，Executor 据此决定是否为拒绝签发回执。
+const StepCapabilitySignature = "capability_signature"
 
 func denyProtocol(err *protocol.Error) *Denial {
 	return &Denial{Code: err.Code, Reason: err.Message}

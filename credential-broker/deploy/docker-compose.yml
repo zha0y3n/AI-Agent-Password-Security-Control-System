@@ -1,0 +1,135 @@
+# AA + Broker + Mock 上游（+ 可选 Dashboard）的一键实验环境。
+#
+#   cd credential-broker/deploy
+#   sh gen-env.sh                      # 生成 .env（随机 Vault 主密钥 / 管理令牌 / Mock Credential，已被 gitignore）
+#   docker compose up -d --build       # 启动 AA、Broker、Mock，并自动 seed
+#   docker compose run --rm e2e        # A+B 全链路联调与攻击样例
+#   docker compose run --rm reset      # 实验之间恢复干净状态并重新 seed
+#   docker compose --profile dashboard up -d dashboard
+#
+# 端口只绑定 127.0.0.1：AA :8000、Broker :8080、Mock :9090、Dashboard :8501。
+#
+# 密钥分布：aa-init 在 aa-runtime 卷中生成 AA / Agent 私钥（仅 aa、e2e 挂载），
+# 只把公钥表复制到 trust 卷供 Broker 只读挂载。Broker 签名密钥与数据库在 broker-data 卷中。
+
+name: ai-security-system
+
+x-broker-image: &broker-image
+  build:
+    context: ..
+  image: ai-security-system/credential-broker:dev
+
+x-aa-image: &aa-image
+  build:
+    context: ../../agent-aa
+    dockerfile: ../credential-broker/deploy/aa.Dockerfile
+  image: ai-security-system/agent-aa:dev
+
+services:
+  aa-init:
+    <<: *aa-image
+    command:
+      - sh
+      - -c
+      - |
+        set -e
+        [ -f /runtime/config.json ] || agent-aa init-demo --directory /runtime
+        install -m 0644 /runtime/public-keys.json /trust/public-keys.json
+    volumes:
+      - aa-runtime:/runtime
+      - trust:/trust
+    restart: "no"
+
+  aa:
+    <<: *aa-image
+    command: ["agent-aa", "serve", "--directory", "/runtime", "--host", "0.0.0.0", "--port", "8000"]
+    volumes:
+      - aa-runtime:/runtime:ro
+    ports: ["127.0.0.1:8000:8000"]
+    depends_on:
+      aa-init: { condition: service_completed_successfully }
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 2s
+      retries: 30
+
+  mock:
+    <<: *broker-image
+    entrypoint: ["/app/mock-upstream"]
+    environment:
+      MOCK_ADDR: ":9090"
+      MOCK_GIT_TOKEN: ${MOCK_GIT_TOKEN:?run gen-env.sh first}
+      MOCK_DB_TOKEN: ${MOCK_DB_TOKEN:?run gen-env.sh first}
+    ports: ["127.0.0.1:9090:9090"]
+
+  broker:
+    <<: *broker-image
+    environment:
+      BROKER_ID: broker-01
+      BROKER_ADDR: ":8080"
+      BROKER_VAULT_KEY: ${BROKER_VAULT_KEY:?run gen-env.sh first}
+      BROKER_ADMIN_TOKEN: ${BROKER_ADMIN_TOKEN:?run gen-env.sh first}
+      BROKER_UPSTREAM_URL: http://mock:9090
+      BROKER_TRUSTED_ISSUER: aa-demo-01
+      BROKER_KEY_REGISTRY: /trust/public-keys.json
+      BROKER_ENABLE_RESET: "1"
+      BROKER_LOG_LEVEL: ${BROKER_LOG_LEVEL:-info}
+    volumes:
+      - broker-data:/app/data
+      - trust:/trust:ro
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on:
+      aa-init: { condition: service_completed_successfully }
+      mock: { condition: service_started }
+
+  seed:
+    image: curlimages/curl:8.10.1
+    entrypoint: ["sh", "/scripts/seed.sh"]
+    environment: &seed-env
+      BROKER_URL: http://broker:8080
+      MOCK_URL: http://mock:9090
+      BROKER_ADMIN_TOKEN: ${BROKER_ADMIN_TOKEN}
+      MOCK_GIT_TOKEN: ${MOCK_GIT_TOKEN}
+      MOCK_DB_TOKEN: ${MOCK_DB_TOKEN}
+      SEED_GIT_EPOCH: ${SEED_GIT_EPOCH:-17}
+      SEED_BATCH: ${SEED_BATCH:-0}
+    volumes:
+      - ../scripts:/scripts:ro
+    depends_on:
+      broker: { condition: service_started }
+    restart: "no"
+
+  # 以下为按需运行的一次性任务：docker compose run --rm <name>
+  reset:
+    image: curlimages/curl:8.10.1
+    entrypoint: ["sh", "/scripts/reset.sh"]
+    environment: *seed-env
+    volumes:
+      - ../scripts:/scripts:ro
+    profiles: [tools]
+
+  e2e:
+    <<: *aa-image
+    command: ["python", "/scripts/e2e-demo.py", "--runtime", "/runtime",
+              "--aa", "http://aa:8000", "--broker", "http://broker:8080", "--mock", "http://mock:9090"]
+    volumes:
+      - aa-runtime:/runtime:ro
+      - ../scripts:/scripts:ro
+    depends_on:
+      aa: { condition: service_healthy }
+    profiles: [tools]
+
+  dashboard:
+    build:
+      context: ../../evaluation-dashboard
+      dockerfile: ../credential-broker/deploy/dashboard.Dockerfile
+    image: ai-security-system/dashboard:dev
+    volumes:
+      - ../../evaluation-dashboard/results:/app/results:ro
+    ports: ["127.0.0.1:8501:8501"]
+    profiles: [dashboard]
+
+volumes:
+  aa-runtime:
+  trust:
+  broker-data:
