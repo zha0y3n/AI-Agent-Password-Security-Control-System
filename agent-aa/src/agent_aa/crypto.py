@@ -11,7 +11,7 @@ from typing import Any
 
 from tongsuopy.crypto import hashes, serialization
 from tongsuopy.crypto.asymciphers import ec
-from tongsuopy.crypto.exceptions import InvalidSignature
+from tongsuopy.crypto.exceptions import InternalError, InvalidSignature
 
 from .errors import ProtocolError, VerificationError
 
@@ -91,7 +91,7 @@ def sign_sm2(private_key: Any, message: bytes) -> bytes:
 def verify_sm2(public_key: Any, message: bytes, signature: bytes) -> None:
     try:
         public_key.verify(signature, message, ec.ECDSA(hashes.SM3()))
-    except (InvalidSignature, ValueError) as exc:
+    except (InternalError, InvalidSignature, ValueError) as exc:
         raise VerificationError("INVALID_SIGNATURE", "SM2 signature verification failed") from exc
 
 

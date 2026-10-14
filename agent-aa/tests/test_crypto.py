@@ -30,3 +30,10 @@ def test_signature_is_asn1_der() -> None:
     signature = sign_sm2(key, b"message")
     assert signature[0] == 0x30
     assert 68 <= len(signature) <= 72
+
+
+def test_malformed_der_is_a_verification_failure() -> None:
+    key = generate_sm2_private_key()
+    with pytest.raises(VerificationError) as caught:
+        verify_sm2(key.public_key(), b"message", b"\x00" * 70)
+    assert caught.value.code == "INVALID_SIGNATURE"
