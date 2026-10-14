@@ -59,6 +59,32 @@ func (db *DB) Migrate(ctx context.Context) error {
 	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
 		return fmt.Errorf("migrate: %w", err)
 	}
+	// 旧库补列：默认值为空串，旧 Challenge 因 audience 不匹配而无法消费（fail closed）。
+	return db.ensureColumn(ctx, "challenges", "audience", "TEXT NOT NULL DEFAULT ''")
+}
+
+// ensureColumn 在列不存在时追加列。table / column / ddl 均为代码内常量。
+func (db *DB) ensureColumn(ctx context.Context, table, column, ddl string) error {
+	rows, err := db.QueryContext(ctx, "SELECT name FROM pragma_table_info(?)", table)
+	if err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return fmt.Errorf("migrate: %w", err)
+		}
+		if name == column {
+			return nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	if _, err := db.ExecContext(ctx, "ALTER TABLE "+table+" ADD COLUMN "+column+" "+ddl); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
 	return nil
 }
 
