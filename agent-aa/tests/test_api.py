@@ -69,3 +69,29 @@ def test_receipt_verify_api(protocol_env) -> None:
     )
     assert response.status_code == 200, response.text
     assert response.json() == {"valid": True, "code": "OK"}
+
+
+def test_capability_verify_api_rejects_malformed_der_with_401(protocol_env) -> None:
+    env = protocol_env
+    client = TestClient(
+        create_app(env["authority"], env["registry"]),
+        raise_server_exceptions=False,
+    )
+    capability = env["authority"].issue_capability(env["request"], now=env["now"])
+    payload = {
+        "capability": capability.model_dump(mode="json"),
+        "request": env["request"].model_dump(mode="json"),
+        "expected_audience": "broker-01",
+    }
+    original = payload["capability"]["signature"]["value"]
+    payload["capability"]["signature"]["value"] = "AAAA" + original[4:]
+
+    response = client.post("/v1/capabilities/verify", json=payload)
+
+    assert response.status_code == 401
+    assert response.json() == {
+        "error": {
+            "code": "INVALID_SIGNATURE",
+            "message": "SM2 signature verification failed",
+        }
+    }
