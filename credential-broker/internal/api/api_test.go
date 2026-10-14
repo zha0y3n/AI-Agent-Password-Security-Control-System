@@ -54,7 +54,7 @@ func setup(t *testing.T) (client, *bytes.Buffer) {
 		BrokerID:    "broker-01",
 		AdminToken:  adminToken,
 		Credentials: env.Credentials,
-		Challenges:  challenge.NewService(env.DB, time.Minute),
+		Challenges:  challenge.NewService(env.DB, time.Minute, "broker-01"),
 		Auditor:     env.Auditor,
 		Signer:      env.Signer,
 		Metrics:     metrics.New(),
