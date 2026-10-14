@@ -1,9 +1,6 @@
 // Package verifier 定义 Broker 的有序校验流水线。
 //
-// 阶段一只提供框架；阶段二按 docs/a-b-interface.md 的顺序填入：
-// Schema -> Capability 签名 -> Audience -> Expiration -> Holder Proof + Challenge
-// -> Task / Service / Resource / Operation -> Request Hash
-//
+// 具体步骤见 steps.go（按 docs/a-b-interface.md 的顺序）。
 // 任何一步拒绝立即停止，后续步骤、Credential 读取、上游调用都不会发生（fail closed）。
 package verifier
 
@@ -13,6 +10,7 @@ import (
 
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/capability"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/metrics"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/protocol"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/upstream"
 )
 
@@ -26,7 +24,11 @@ type Plan struct {
 type Input struct {
 	Body []byte    // 原始请求体（Execution Bundle）
 	Now  time.Time // 本次校验使用的统一时间
-	Plan *Plan     // 由步骤逐步填充
+
+	// 以下由步骤逐步填充
+	Bundle      *protocol.ExecutionBundle
+	RequestHash string // 由 Broker 对实际 AgentRequest 重算
+	Plan        *Plan
 }
 
 // Denial 是拒绝原因。

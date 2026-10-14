@@ -55,7 +55,7 @@ func run() error {
 		return err
 	}
 	auditor := evidence.NewAuditor(db, signer, cfg.CheckpointEvery)
-	challenges := challenge.NewService(db, cfg.ChallengeTTL)
+	challenges := challenge.NewService(db, cfg.ChallengeTTL, cfg.BrokerID)
 
 	srv := &api.Server{
 		BrokerID:    cfg.BrokerID,
