@@ -1,6 +1,6 @@
 # A 模块第一轮进度
 
-更新时间：2026-10-12（Asia/Shanghai）。
+更新时间：2026-10-14（Asia/Shanghai）。
 
 ## 《111》周期对照
 
@@ -30,6 +30,8 @@
 - FastAPI、CLI、开发运行目录、Schema 和跨语言向量。
 
 ## 测试结果
+
+本次非法 DER 修复回归：`41 passed`。`/v1/capabilities/verify` 对非法 DER 返回 401 `INVALID_SIGNATURE`，不再返回 500。
 
 最近一次本机运行：`39 passed`。覆盖 Canonical JSON、SM3 已知答案、SM2 正常/篡改、正常签发、错误资源/Body/Task、布尔值与整数语义区分、TTL、票据/epoch 篡改、过期、跨任务/服务/资源/操作/路径、RequestHash、Audience、Wrong Holder、Challenge、Proof 过期、Receipt 篡改/验签 API、API 正常/拒绝/重复字段，以及 Capability/Holder Proof/Receipt 三类共享向量。本机 OpenSSL 3.0.13 也用显式 SM2 ID 成功验证了这三类铜锁签名。
 
