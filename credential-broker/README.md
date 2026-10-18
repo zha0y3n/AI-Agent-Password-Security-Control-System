@@ -4,15 +4,36 @@ Broker 是系统里唯一的可信执行点。Agent 提交 **Execution Bundle**�
 
 Go 实现，国密原语来自 [`emmansun/gmsm`](https://github.com/emmansun/gmsm)，没有自研 SM2/SM3/SM4。
 
+## 文档
+
+| 文档 | 内容 |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | 设计说明：模块边界、执行时序、校验流水线顺序的理由、Atomic Consume 与线性化点、为什么不是严格 exactly-once、Vault 与 Epoch、Credential 明文出现的位置、回执、审计、密钥配置、已知限制 |
+| [docs/security-mapping.md](docs/security-mapping.md) | 威胁与防御对照：每类攻击被哪一步拦下、返回什么码、由哪个测试或演示证明 |
+| [docs/defense.md](docs/defense.md) | 答辩材料：六个必答题、常见追问、5 分钟演示流程 |
+| [../docs/audit-chain.md](../docs/audit-chain.md) | 审计哈希链与检查点的字节格式（供 C 独立验证） |
+
 ## 完成度
 
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 一：基础设施 | 国密封装、SQLite、SM4-GCM Vault、Credential 生命周期与 Epoch、原子消费、幂等、Mock 上游、审计哈希链、Challenge、埋点、Docker | 完成 |
 | 二：接入 A 的协议 | `ZTCANON-JSON-v1`、Request Hash、SM2 域分离验签（三组共享向量）、可信公钥表、校验流水线、`POST /v1/execute`、Receipt 签发（A 的 `ReceiptVerifier` 验过）、错误码与 HTTP 状态 | 完成；`result_envelope` 结构待 A/C 联审 |
-| 三：A + B 联调 | 真实 HTTP 全链路：Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit，9 类攻击样例全部拒绝 | 完成（B 侧）；Epoch 来源待 A 改 |
+| 三：A + B 联调 | 真实 HTTP 全链路：Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit；`e2e-demo.py` 的 7 类攻击样例全部按预期拒绝或幂等处理，旧 Epoch 另行手工验证 | 完成（B 侧）；Epoch 来源待 A 改 |
 | 四：面向 C 的支撑 | 副作用计数、Capability 状态查询、审计导出 / 复核、Broker 公钥记录、Metrics、状态重置、种子数据与批量 Credential、docker compose | 完成；接口是否够用待 C 确认 |
-| 五：竞赛化 | 架构文档、答辩材料 | 未开始 |
+| 五：竞赛化 | 设计说明、威胁与防御对照、答辩材料（见上方“文档”） | 文档完成；之后只修 Bug，不改协议 |
+
+**B 约 90%。** 剩下的部分：
+
+- 等 A/C 联审：`result_envelope`、Epoch 来源、错误码表、C 的接口需求。
+- 可选：崩溃后停在 `CONSUMING` 的 Capability 的恢复流程。
+
+最近一次验证是 2026-10-18，已包含 A 在 PR #5 中的修复：
+
+- `go vet`、`gofmt` 无问题，`go test -race ./...` 全部通过。
+- `make interop` 通过：A 的 `ReceiptVerifier` 接受了 Go 签发的回执，篡改后的副本被拒绝。
+- 用重新构建的镜像在 compose 里跑 `e2e`，14 项检查全部通过。
+- AA、Broker、Mock 的日志中查不到 Credential、管理员令牌或 Vault 主密钥。
 
 ## 快速开始
 
@@ -280,6 +301,7 @@ internal/upstream     Mock 服务与上游客户端
 internal/errcode      B 扩展错误码与 HTTP 状态映射
 scripts/              seed / reset、跨语言联调（gen-a-bundle.py、verify-a-receipt.py）、全链路演示（e2e-demo.py）
 deploy/               docker-compose.yml、AA / Dashboard 镜像、gen-env.sh
+docs/                 设计说明、威胁与防御对照、答辩材料
 ```
 
 ## 待联审与已知限制
@@ -288,6 +310,9 @@ deploy/               docker-compose.yml、AA / Dashboard 镜像、gen-env.sh
 - **`result_envelope` 结构与 Receipt 返回方式**：Receipt 目前随 `/v1/execute` 响应一起返回，并在幂等重放时原样再返回。两者都是 B 的提案，A/C 联审后需写入 `shared/schemas/` 和 `docs/crypto-protocol.md` §6。在此之前不要改动 `shared/`。
 - **DENIED 回执**：只为已验签的 Capability 签发，每次拒绝都要做一次 SM2 签名。如果 C 的压测发现这部分开销明显，可以改为按需签发。
 - **外部 API 成功但状态未落盘**：上游已执行而 Broker 写库前崩溃时，Capability 会停在 `CONSUMING`，之后的提交一律返回 `REPLAY_IN_PROGRESS`。这是 fail closed，但目前还没有恢复流程。
-- **公钥轮换**：Broker、AA、Agent 的公钥表都在启动时加载，更换公钥需要重启 Broker。
+- **公钥轮换**：Broker、AA、Agent 的公钥表都在启动时加载，更换公钥需要重启 Broker。`/v1/broker/key-registry` 只发布当前密钥，无法把泄露的旧 Broker 密钥标记为 `REVOKED`，只能换用新的 `BROKER_KEY_ID` 并通知验证方。
 - **审计条目编码**：审计条目目前用 `encoding/json`（字段顺序固定），还没有改用 `ZTCANON-JSON-v1`。格式见 `docs/audit-chain.md`。
 - **`POST /v1/admin/reset`** 会清空审计链，只能用于开发和实验环境。
+- **上游网络隔离**：Demo 中 Mock 上游可以从本机直接访问。没有 Credential 只会返回 401，但生产环境需要让上游只接受来自 Broker 的连接（mTLS 或网络策略）。
+
+完整的限制与可能的改进见 [docs/architecture.md §11](docs/architecture.md#11-已知限制)。

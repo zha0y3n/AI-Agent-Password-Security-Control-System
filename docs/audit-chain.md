@@ -8,7 +8,9 @@
 |---|---|
 | `GET /v1/audit?from=1&limit=1000` | 审计条目，`limit` 最大 1000，分页取完 |
 | `GET /v1/audit/checkpoints` | 全部签名检查点 |
-| `GET /v1/broker/public-key` | Broker SM2 公钥（未压缩 `04‖X‖Y` 十六进制） |
+| `GET /v1/broker/public-key` | Broker SM2 公钥：`public_key` 为未压缩 `04‖X‖Y` 十六进制，`public_key_pem` 为 PEM SPKI |
+| `GET /v1/broker/key-registry` | 同一公钥，以 A 的 `KeyRegistryDocument` 格式发布（用途 `RECEIPT_SIGNING`） |
+| `GET /v1/audit/verify` | Broker 用自己的参考实现复核整条链与全部检查点，返回 `valid`、`entries`、`checkpoints`、`head_hash` |
 | `POST /v1/audit/checkpoints` | 管理员强制为当前链头生成检查点 |
 
 条目格式：
@@ -64,7 +66,7 @@ signature = SM2-Sign(sk_B, msg)       -- 含 Z 值预处理，UID = "12345678123
 | `capability.consume` | 赢得 Capability 唯一执行权 | cap_id, request_hash, credential_id, credential_epoch |
 | `capability.complete` | 执行成功 | cap_id, result_hash |
 | `capability.fail` | 执行失败 | cap_id, error_code |
-| `execute.deny` | 请求被拒绝 | failed_step, code, [cap_id, request_hash] |
+| `execute.deny` | 请求被拒绝 | failed_step, code；Capability 验签通过时另有 cap_id, request_hash, receipt_id |
 
 审计内容**从不包含** Credential 明文或密文。
 
