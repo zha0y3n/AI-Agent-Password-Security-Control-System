@@ -2,16 +2,16 @@
 
 目标：AI Agent 即使被 Prompt Injection 等手段诱导，也无法绕过密码授权边界，用长期 Credential 产生超出授权范围的真实业务副作用。Agent 只持有一次性、强绑定的 Capability，从不接触目标服务的长期 Credential。
 
-## 当前完成度（2026-10-14）
+## 当前完成度（2026-10-18）
 
 | 模块                    | 负责  | 状态                                                                 | 验证                                                                  |
 | ----------------------- | ----- | -------------------------------------------------------------------- | --------------------------------------------------------------------- |
-| A：Agent + AA（Python） | A     | 《111》第 1～6 周期 A 端交付已完成；验签 500 缺陷待修                | `pytest agent-aa/tests`：39 passed；`agent-aa demo` 闭环通过          |
-| B：Broker + Vault（Go） | B     | 阶段一～四完成（`/v1/execute`、Receipt、HTTP 联调、C 支撑、docker compose）；阶段五未开始 | `go test -race ./...` 通过；`make interop` 通过；compose 内 e2e 14/14 |
+| A：Agent + AA（Python） | A     | 《111》第 1～6 周期 A 端交付已完成；非法 DER 验签 500 已修复（PR #5）；Credential Epoch 仍写死为 17 | `pytest agent-aa/tests`：41 passed；`agent-aa demo` 闭环通过          |
+| B：Broker + Vault（Go） | B     | 阶段一～五完成（`/v1/execute`、Receipt、HTTP 联调、C 支撑、docker compose、设计与答辩文档）；待 A/C 联审 | `go test -race ./...` 通过；`make interop` 通过（A 的 `ReceiptVerifier`）       |
 | C：评测 + Dashboard     | C     | 早期：覆盖 AA 签发/验签接口、Broker Credential 生命周期接口          | 脚本需先启动 AA / Broker                                              |
-| 全链路                  | A+B+C | **A+B 已经 HTTP 打通**；C 的系统实验尚未开始                          | `docker compose run --rm e2e`                                         |
+| 全链路                  | A+B+C | **A+B 已经 HTTP 打通**；C 的系统实验尚未开始                          | 用合入 A 修复后的镜像，compose 内 e2e 14/14；日志中无密钥            |
 
-**整体约 70%。** Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit 已通过真实 HTTP 跑通，Go 签发的 Receipt 能被 A 的 `ReceiptVerifier` 验过，重放、篡改、窃取、伪造 Challenge、提示注入、旧 Epoch 均被拒绝。C 已可基于 `credential-broker/deploy/docker-compose.yml` 开展系统实验。
+**整体约 70%**（三方等权粗估：A 约 95%，B 约 90%，C 约 25%）。瓶颈在 C 的系统实验。Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit 已通过真实 HTTP 跑通，Go 签发的 Receipt 能被 A 的 `ReceiptVerifier` 验过，重放、篡改、窃取、伪造 Challenge、提示注入、旧 Epoch 均被拒绝。C 已可基于 `credential-broker/deploy/docker-compose.yml` 开展系统实验。
 
 ### A 已实现
 
@@ -25,7 +25,7 @@
 
 ### B 已实现
 
-阶段一（国密封装、SM4-GCM Vault、Credential 生命周期与 Epoch、原子消费、幂等、Mock 上游、审计哈希链、Challenge、埋点）、阶段二（Go `ZTCANON-JSON-v1`、SM2 域分离验签、校验流水线、`POST /v1/execute`、Execution Receipt）、阶段三 B 侧（HTTP 全链路 `scripts/e2e-demo.py`）、阶段四（Capability 状态、审计复核、状态重置、seed / 批量 Credential、docker compose）。详见 [credential-broker/README.md](credential-broker/README.md)。
+阶段一（国密封装、SM4-GCM Vault、Credential 生命周期与 Epoch、原子消费、幂等、Mock 上游、审计哈希链、Challenge、埋点）、阶段二（Go `ZTCANON-JSON-v1`、SM2 域分离验签、校验流水线、`POST /v1/execute`、Execution Receipt）、阶段三 B 侧（HTTP 全链路 `scripts/e2e-demo.py`）、阶段四（Capability 状态、审计复核、状态重置、seed / 批量 Credential、docker compose）、阶段五（设计说明、威胁与防御对照、答辩材料，见 [credential-broker/docs/](credential-broker/docs/)）。详见 [credential-broker/README.md](credential-broker/README.md)。
 
 ### C 已实现
 
@@ -36,18 +36,19 @@
 
 ### 已知问题
 
-- **AA 验签 500（未修复）**：签名值被篡改成非法 DER（如前缀改为 `AAAA`）时，`/v1/capabilities/verify` 返回 500，而不是 401 `INVALID_SIGNATURE`。请求仍被拒绝，但违反了“失败即明确拒绝”的约定。由 C 在 `a2d7a6c` 中发现；根因是 `agent-aa/src/agent_aa/crypto.py` 的 `verify_sm2` 只捕获 `InvalidSignature`/`ValueError`，未捕获 tongsuopy 的 `InternalError`。
-- **Credential Epoch 来源不一致**：A 的可信任务库把 Epoch 写死为 17，Broker 新建 Credential 从 1 开始；`credential-broker/scripts/seed.sh` 暂时把 `github-prod` 轮换到 17 来对齐。
+- **Credential Epoch 来源不一致**：A 的可信任务库把 Epoch 写死为 17（`agent-aa/src/agent_aa/runtime.py`、`demo.py`），Broker 新建 Credential 从 1 开始；`credential-broker/scripts/seed.sh` 暂时把 `github-prod` 轮换到 17 来对齐。轮换或撤销之后，AA 签发的 Capability 都会被拒（`CREDENTIAL_EPOCH_MISMATCH`），只能用 `reset` 恢复。
 - **`result_envelope` 未固化**：结构是 B 的提案（见 `credential-broker/README.md`），A/C 联审后需写入 `shared/`。
-- `run_credential_lifecycle_tests.py` 在源码中硬编码了 `ADMIN_TOKEN`，违反“不提交 token”的约定，且必须与本机 `.env` 中的 `BROKER_ADMIN_TOKEN` 手动保持一致；应改为从环境变量读取。
+- **`run_credential_lifecycle_tests.py` 在源码中硬编码了 `ADMIN_TOKEN`**，违反“不提交 token”的约定，且已推送到 GitHub。如果这个值在任何环境里用过，应视为已泄露并更换；脚本应改为从环境变量读取。
 - C 的脚本依赖 `requests`、`streamlit`、`pandas`，尚未声明在任何依赖文件中。
+
+已解决：AA 对非法 DER 签名返回 500（C 发现，A 在 `d1b831b` 中修复并补了回归测试，经 PR #5 合入）。
 
 ## 待办（按依赖顺序）
 
-1. **A 修复验签 500**：`verify_sm2` 对任何底层验签异常都返回 `INVALID_SIGNATURE`，并补回归测试。
-2. **A+B 剩余对齐**：Credential Epoch 获取方式（建议 AA 读 `GET /v1/credentials/{id}/status`）、`result_envelope` 结构与 Receipt 返回方式（B 已按提案实现）、统一错误码表（B 的映射见 `credential-broker/README.md`）。
+1. **A+B 剩余对齐**：Credential Epoch 获取方式（建议 AA 读 `GET /v1/credentials/{id}/status`）、`result_envelope` 结构与 Receipt 返回方式（B 已按提案实现）、统一错误码表（B 的映射见 `credential-broker/README.md`）。
+2. **C 移除硬编码 token 并声明依赖**：见上方已知问题。
 3. **C 确认实验接口**：B 已提供副作用计数、Capability 状态、审计导出 / 复核、Receipt、Metrics、重置与批量 Credential，需 C 确认是否够用。
-4. **B 阶段五**：架构文档、答辩材料。
+4. **B 收尾**：崩溃后停在 `CONSUMING` 的 Capability 的恢复流程（可选）。设计说明、威胁与防御对照、答辩材料已在 `credential-broker/docs/`。
 5. **C 系统实验**：旧 Epoch、撤销、重放、并发重放、撤销竞态、提示注入、性能；输出 `security.csv`、`performance.csv`、`concurrency.csv`、`revocation.csv`、`prompt_injection.csv`，并检查实际副作用而不只是 HTTP 状态码。
 
 ## 目录
@@ -147,3 +148,4 @@ mkdir -p evaluation-dashboard/results
 - [docs/audit-chain.md](docs/audit-chain.md)：审计链格式
 - [docs/a-progress.md](docs/a-progress.md)、[docs/a-manual-review.md](docs/a-manual-review.md)：A 进度与自审
 - [docs/b-plan.md](docs/b-plan.md)、[docs/b-progress.md](docs/b-progress.md)：B 计划与进度
+- [credential-broker/docs/](credential-broker/docs/)：Broker 设计说明、威胁与防御对照、答辩材料

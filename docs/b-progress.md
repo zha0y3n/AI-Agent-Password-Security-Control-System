@@ -45,6 +45,16 @@ Capability 状态查询、审计复核接口、状态重置（`BROKER_ENABLE_RES
 - `result_envelope` 结构与 Receipt 返回方式（B 的提案见 `credential-broker/README.md`），需写入 `shared/`。
 - Credential Epoch 来源：A 的可信任务库写死 17；`seed.sh` 暂时把 `github-prod` 轮换到 17 来对齐。
 
+## 阶段五：竞赛化（文档完成）
+
+| 文档 | 内容 |
+|---|---|
+| [`credential-broker/docs/architecture.md`](../credential-broker/docs/architecture.md) | Broker 架构、校验流水线、Atomic Consume 语义（为什么不是严格 exactly-once）、Vault 设计、审计链、部署与密钥配置 |
+| [`credential-broker/docs/security-mapping.md`](../credential-broker/docs/security-mapping.md) | 威胁 → 拦截步骤 → 拒绝码 → 测试 / 演示 |
+| [`credential-broker/docs/defense.md`](../credential-broker/docs/defense.md) | 计划中的六个答辩问题、常见追问、演示流程 |
+
+之后只修 Bug，不改协议。可选改进（崩溃恢复、公钥热加载、审计条目改用 ZTCANON）见 `architecture.md` §11。
+
 ## HTTP 接口
 
 完整接口表、`/v1/execute` 响应与错误码见 [credential-broker/README.md](../credential-broker/README.md#http-接口)。
