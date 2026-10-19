@@ -28,7 +28,7 @@ if _env_path.exists() and not os.environ.get("BROKER_ADMIN_TOKEN"):
 ADMIN_TOKEN = os.environ.get("BROKER_ADMIN_TOKEN", "")
 RUNTIME_DIR = BROKER_DIR.parent / ".runtime"
 
-ROUNDS = 20
+ROUNDS = 50
 
 def run_round(round_id, agent):
     # 1. 恢复环境，确保 github-prod 是活着的，且 epoch 对齐
