@@ -19,7 +19,16 @@
    ```bash
    source .venv/bin/activate
    ```
-2. 运行各类实验脚本：   
+2. 初始化实验数据：
+   在运行测试前，必须加载 B 的环境变量，并重置 B 的数据库、灌入与 A 对齐的初始凭据。
+   ```bash
+   set -a; . credential-broker/.env; set +a
+   cd credential-broker
+   bash scripts/reset.sh
+   bash scripts/seed.sh
+   cd ..
+   ```
+3. 运行各类实验脚本：   
    ```bash
    # 1. AA 接口安全测试
    python evaluation-dashboard/scripts/run_security_tests.py
