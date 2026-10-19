@@ -1,11 +1,11 @@
 case_id,category,description,expected_decision,actual_decision,error_code,credential_accessed,side_effect_count,expected_http,actual_http,passed,latency_ms,timestamp
-normal,baseline,正常签发,ALLOW,ALLOW,,False,0,200,200,True,11.19,2026-10-20T00:40:20
-unknown_task,task,未知任务,DENY,DENY,UNKNOWN_TASK,False,0,403,403,True,3.79,2026-10-20T00:40:20
-wrong_resource,binding,换资源,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,3.27,2026-10-20T00:40:20
-wrong_operation,binding,换操作,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,3.6,2026-10-20T00:40:20
-wrong_path,binding,换路径,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,3.14,2026-10-20T00:40:20
-wrong_method,binding,换 HTTP 方法,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,2.88,2026-10-20T00:40:20
-wrong_agent,identity,错误 agent,DENY,DENY,AGENT_TASK_MISMATCH,False,0,403,403,True,2.67,2026-10-20T00:40:20
-unknown_key,identity,未知 agent_key_id,DENY,DENY,AGENT_TASK_MISMATCH,False,0,403,403,True,3.6,2026-10-20T00:40:20
-ttl_zero,schema,ttl=0,DENY,DENY,SCHEMA_VALIDATION_FAILED,False,0,422,422,True,4.52,2026-10-20T00:40:20
-ttl_huge,schema,ttl 超长,DENY,DENY,SCHEMA_VALIDATION_FAILED,False,0,422,422,True,3.61,2026-10-20T00:40:20
+normal,baseline,正常签发,ALLOW,ALLOW,,False,0,200,200,True,7.58,2026-10-20T01:25:38
+unknown_task,task,未知任务,DENY,DENY,UNKNOWN_TASK,False,0,403,403,True,5.41,2026-10-20T01:25:38
+wrong_resource,binding,换资源,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,3.81,2026-10-20T01:25:38
+wrong_operation,binding,换操作,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,4.09,2026-10-20T01:25:38
+wrong_path,binding,换路径,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,5.41,2026-10-20T01:25:38
+wrong_method,binding,换 HTTP 方法,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,4.31,2026-10-20T01:25:38
+wrong_agent,identity,错误 agent,DENY,DENY,AGENT_TASK_MISMATCH,False,0,403,403,True,2.76,2026-10-20T01:25:38
+unknown_key,identity,未知 agent_key_id,DENY,DENY,AGENT_TASK_MISMATCH,False,0,403,403,True,4.66,2026-10-20T01:25:38
+ttl_zero,schema,ttl=0,DENY,DENY,SCHEMA_VALIDATION_FAILED,False,0,422,422,True,4.97,2026-10-20T01:25:38
+ttl_huge,schema,ttl 超长,DENY,DENY,SCHEMA_VALIDATION_FAILED,False,0,422,422,True,3.83,2026-10-20T01:25:38
