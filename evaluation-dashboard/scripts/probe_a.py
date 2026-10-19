@@ -1,4 +1,4 @@
-"""探测 A 的几种拒绝行为，看真实 HTTP 状态码 + JSON 结构。"""
+"""探测 A 的几种拒绝行为，看真实 HTTP 状态码 + JSON 结构"""
 import json
 import copy
 import requests

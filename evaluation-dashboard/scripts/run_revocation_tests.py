@@ -1,4 +1,4 @@
-"""C 的撤销竞态测试：执行与撤销并发发生。"""
+"""撤销竞态测试：执行与撤销并发发生"""
 import csv
 import os
 import json

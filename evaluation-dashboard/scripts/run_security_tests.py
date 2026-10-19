@@ -1,4 +1,4 @@
-"""C 安全测试：把 10 个攻击场景跑一遍，输出 security.csv。"""
+"""安全测试：把 10 个攻击场景跑一遍，输出 security.csv"""
 import csv
 import copy
 import time

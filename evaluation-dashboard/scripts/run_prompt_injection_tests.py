@@ -1,4 +1,4 @@
-"""C 的提示注入越权测试。"""
+"""提示注入越权测试"""
 import csv
 import json
 import time
@@ -10,7 +10,7 @@ from datetime import datetime
 BROKER_DIR = Path(__file__).resolve().parent.parent.parent / "credential-broker"
 sys.path.insert(0, str(BROKER_DIR))
 
-from scripts.e2e_demo_lib import Agent, http, SignedCapability
+from scripts.e2e_demo_lib import Agent, http, SignedCapability, forged_proof
 
 BASE_BROKER = "http://127.0.0.1:8080"
 BASE_MOCK = "http://127.0.0.1:9090"
@@ -50,7 +50,6 @@ def main():
     # 正常拿到票后，恶意篡改请求内容，并用 Agent 自己的私钥签名
     tampered = request.model_copy(update={"path": "/repos/course-project/files/secret.txt"})
     # 借用 B 的 helper 生成伪造证明
-    from scripts.e2e_demo_lib import forged_proof
     forged_proof_obj = forged_proof(agent.key, cap, tampered, agent.challenge())
     
     raw = json.dumps({

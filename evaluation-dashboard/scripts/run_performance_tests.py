@@ -1,4 +1,4 @@
-"""C 的性能测试：1/10/50/100 并发下的耗时与吞吐。"""
+"""性能测试：1/10/50/100 并发下的耗时与吞吐"""
 import csv
 import json
 import statistics
@@ -27,8 +27,8 @@ def run_round(n_threads, round_id, agent):
     latencies = []
     lock = threading.Lock()
     
-    def worker(idx):
-        # 每个请求必须用独立的票据，否则会触发重放拦截
+    def worker():
+        # 性能测试需要独立票据，避免触发重放拦截
         request = agent.request()
         code, cap_body = agent.issue(request)
         if code != 200:
@@ -58,7 +58,7 @@ def run_round(n_threads, round_id, agent):
     while remaining > 0:
         batch = min(n_threads, remaining)
         for i in range(batch):
-            t = threading.Thread(target=worker, args=(remaining - i,))
+            t = threading.Thread(target=worker)
             t.start()
             threads.append(t)
         for t in threads[-batch:]:

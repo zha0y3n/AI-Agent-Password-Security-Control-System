@@ -1,4 +1,4 @@
-"""C 的并发重放测试：100 并发同一张票，只允许成功 1 次。"""
+"""并发重放测试：100 并发同一张票，只允许成功 1 次"""
 import csv
 import json
 import threading
