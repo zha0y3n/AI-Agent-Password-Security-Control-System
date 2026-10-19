@@ -115,7 +115,6 @@ def main():
 
     subprocess.run(["bash", "scripts/reset.sh"], cwd=str(root_dir / "credential-broker"), env=env, stdout=subprocess.DEVNULL)
     subprocess.run(["bash", "scripts/seed.sh"], cwd=str(root_dir / "credential-broker"), env=env, stdout=subprocess.DEVNULL)
-    print("=== 环境重置完毕，开始测试 ===")
     rows = []
     for level in CONCURRENCY_LEVELS:
         for r in range(1, ROUNDS_PER_LEVEL + 1):
