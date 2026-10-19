@@ -1,5 +1,5 @@
 case_id,category,description,expected_decision,actual_decision,error_code,credential_accessed,side_effect_count,passed,detail,timestamp
-aa_refuse_injection,prompt_injection,AA拒绝签发任务外资源,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,True,,2026-10-19T22:53:47
-broker_refuse_tamper,prompt_injection,Broker拒绝篡改请求,DENY,DENY,REQUEST_HASH_MISMATCH,False,0,True,,2026-10-19T22:53:47
-broker_refuse_forged_cap,prompt_injection,Broker拒绝伪造Capability,DENY,DENY,INVALID_SIGNATURE,False,0,True,,2026-10-19T22:53:47
-zero_side_effects,prompt_injection,所有注入均未产生副作用,DENY,DENY,,False,0,True,side_effects=0,2026-10-19T22:53:47
+aa_refuse_injection,prompt_injection,AA拒绝签发任务外资源,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,True,,2026-10-19T23:19:23
+broker_refuse_tamper,prompt_injection,Broker拒绝篡改请求,DENY,DENY,REQUEST_HASH_MISMATCH,False,0,True,,2026-10-19T23:19:23
+broker_refuse_forged_cap,prompt_injection,Broker拒绝伪造Capability,DENY,DENY,INVALID_SIGNATURE,False,0,True,,2026-10-19T23:19:23
+zero_side_effects,prompt_injection,所有注入均未产生副作用,DENY,DENY,,False,0,True,side_effects=0,2026-10-19T23:19:23

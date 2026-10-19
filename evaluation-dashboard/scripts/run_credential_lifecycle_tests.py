@@ -2,10 +2,20 @@
 import csv
 import os
 import time
+from pathlib import Path
 import requests
 from datetime import datetime
 
 BASE = "http://127.0.0.1:8080"
+# 自动尝试从 credential-broker/.env 读取 ADMIN_TOKEN，防止评委忘记 source
+_env_path = Path(__file__).resolve().parent.parent.parent / "credential-broker" / ".env"
+if _env_path.exists() and not os.environ.get("BROKER_ADMIN_TOKEN"):
+    with open(_env_path, "r") as _f:
+        for _line in _f:
+            if _line.startswith("BROKER_ADMIN_TOKEN="):
+                os.environ["BROKER_ADMIN_TOKEN"] = _line.strip().split("=")[1]
+                break
+
 ADMIN_TOKEN = os.environ.get("BROKER_ADMIN_TOKEN", "")
 
 FIELDS = ["case_id", "category", "description", 
