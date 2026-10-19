@@ -133,7 +133,6 @@ def main():
 
     subprocess.run(["bash", "scripts/reset.sh"], cwd=str(root_dir / "credential-broker"), env=env, stdout=subprocess.DEVNULL)
     subprocess.run(["bash", "scripts/seed.sh"], cwd=str(root_dir / "credential-broker"), env=env, stdout=subprocess.DEVNULL)
-    print("=== 环境重置完毕，开始测试 ===")
     rows = []
     for i in range(1, ROUNDS + 1):
         row = run_round(i, agent)
