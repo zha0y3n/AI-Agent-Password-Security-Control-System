@@ -1,4 +1,4 @@
-"""探测 /v1/capabilities/verify 的校验行为和错误码。"""
+"""探测 /v1/capabilities/verify 的校验行为和错误码"""
 import json
 import copy
 import requests

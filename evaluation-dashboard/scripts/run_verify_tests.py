@@ -1,4 +1,4 @@
-"""C 的 verify 接口攻击测试，输出 verify.csv。"""
+"""verify 接口攻击测试，输出 verify.csv"""
 import csv, copy, time, requests
 from datetime import datetime
 

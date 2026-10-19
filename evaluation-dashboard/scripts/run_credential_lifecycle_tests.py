@@ -1,4 +1,4 @@
-"""C 的凭据生命周期测试，输出 credential_lifecycle.csv。"""
+"""凭据生命周期测试，输出 credential_lifecycle.csv"""
 import csv
 import os
 import time

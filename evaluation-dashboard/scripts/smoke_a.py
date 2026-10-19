@@ -1,4 +1,4 @@
-"""C 的第一个连 A 的冒烟脚本。"""
+"""连 A 的冒烟脚本"""
 import json
 import requests
 from datetime import datetime
