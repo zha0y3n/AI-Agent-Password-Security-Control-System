@@ -13,18 +13,24 @@
 
 ## 🚀 如何复现测试
 
-**前置条件**：如果你是在全新环境（刚 clone 代码），必须先启动 A 的 AA 服务和 B 的 Broker/Mock 服务。我们提供了一个**一键启动脚本**，它会自动建虚拟环境、生成密钥、启动 3 个服务并灌入初始数据。
+**前置条件**：请确保你的机器已安装 `git`、`python3`、`go` 环境。
 
-在项目根目录执行：
+**步骤 1：获取代码**
+```bash
+git clone git@github.com:zha0y3n/AI-Agent-Password-Security-Control-System.git
+cd AI-Agent-Password-Security-Control-System
+```
 
+**步骤 2：一键启动基础服务**
+我们提供了一个一键启动脚本。它会自动建 Python 虚拟环境、安装依赖、生成密钥、启动 A 的 AA 服务和 B 的 Broker/Mock 服务，并自动灌入初始数据（Epoch=17）。
+请在项目根目录执行：
 ```bash
 bash evaluation-dashboard/scripts/start_all_services.sh
 ```
+*（等待脚本输出 "🎉 环境准备完毕，服务已全部启动！" 即可进行下一步）*
 
-*(注：如果使用 Docker，可直接参考根目录 README 的 Docker Compose 说明。)*
-
-**服务启动后，运行各类实验脚本：**
-
+**步骤 3：运行各类实验脚本**
+服务启动后，运行以下命令进行测试：
 ```bash
 source .venv/bin/activate
 
@@ -47,11 +53,9 @@ python evaluation-dashboard/scripts/run_prompt_injection_tests.py
 ## 📊 查看可视化 Dashboard
 
 运行命令启动：
-
 ```bash
 streamlit run evaluation-dashboard/dashboard/app.py --server.address 0.0.0.0
 ```
-
 在浏览器中访问 http://localhost:8501 即可查看图表。
 
 ## 🛡️ 测试核心理念
