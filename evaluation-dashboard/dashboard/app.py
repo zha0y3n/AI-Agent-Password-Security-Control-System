@@ -66,10 +66,10 @@ with tabs[3]:
     if df is None: st.warning("缺少 concurrency.csv")
     else:
         raw_df = pd.read_csv(os.path.join(RESULTS, "concurrency.csv"))
-        st.metric("最大并发副作用次数", int(raw_df["side_effects"].max()), 
+        st.metric("最大并发副作用次数", int(raw_df["side_effect_count"].max()), 
                   help="无论多少并发，真实副作用最多只能是 1 次")
         st.dataframe(df, use_container_width=True)
-        st.bar_chart(raw_df.groupby("concurrency")["side_effects"].mean())
+        st.bar_chart(raw_df.groupby("concurrency")["side_effect_count"].mean())
 
 # 5. 性能测试
 with tabs[4]:
