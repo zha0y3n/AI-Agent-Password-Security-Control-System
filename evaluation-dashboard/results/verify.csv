@@ -1,11 +1,11 @@
 case_id,category,description,expected_decision,actual_decision,error_code,credential_accessed,side_effect_count,expected_http,actual_http,passed,latency_ms,timestamp
-verify_normal,baseline,正常验签,ALLOW,ALLOW,,False,0,200,200,True,6.18,2026-10-20T00:40:21
-verify_tampered_sig,signature,篡改签名,DENY,DENY,INVALID_SIGNATURE,False,0,401,401,True,4.56,2026-10-20T00:40:21
-verify_wrong_audience,binding,audience 错误,DENY,DENY,AUDIENCE_MISMATCH,False,0,401,401,True,3.31,2026-10-20T00:40:21
-verify_wrong_agent,binding,agent_id 不一致,DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,401,401,True,4.23,2026-10-20T00:40:21
-verify_wrong_task,binding,task_id 不一致,DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,401,401,True,4.19,2026-10-20T00:40:21
-verify_wrong_resource,binding,resource 不一致,DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,401,401,True,3.62,2026-10-20T00:40:21
-verify_wrong_operation,binding,operation 不一致,DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,401,401,True,3.74,2026-10-20T00:40:21
-verify_wrong_credential,binding,credential_id 不一致,DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,401,401,True,4.15,2026-10-20T00:40:21
-verify_hash_mismatch,binding,改 path 触发 hash 不一致,DENY,DENY,REQUEST_HASH_MISMATCH,False,0,401,401,True,3.56,2026-10-20T00:40:21
-verify_expired,lifecycle,过期票据验签,DENY,DENY,CAPABILITY_EXPIRED,False,0,401,401,True,6.13,2026-10-20T00:40:23
+verify_normal,baseline,正常验签,ALLOW,ALLOW,,False,0,200,200,True,8.99,2026-10-20T01:25:39
+verify_tampered_sig,signature,篡改签名,DENY,DENY,INVALID_SIGNATURE,False,0,401,401,True,3.92,2026-10-20T01:25:39
+verify_wrong_audience,binding,audience 错误,DENY,DENY,AUDIENCE_MISMATCH,False,0,401,401,True,6.65,2026-10-20T01:25:39
+verify_wrong_agent,binding,agent_id 不一致,DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,401,401,True,5.33,2026-10-20T01:25:39
+verify_wrong_task,binding,task_id 不一致,DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,401,401,True,5.64,2026-10-20T01:25:39
+verify_wrong_resource,binding,resource 不一致,DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,401,401,True,7.04,2026-10-20T01:25:39
+verify_wrong_operation,binding,operation 不一致,DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,401,401,True,4.6,2026-10-20T01:25:39
+verify_wrong_credential,binding,credential_id 不一致,DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,401,401,True,5.72,2026-10-20T01:25:39
+verify_hash_mismatch,binding,改 path 触发 hash 不一致,DENY,DENY,REQUEST_HASH_MISMATCH,False,0,401,401,True,7.97,2026-10-20T01:25:39
+verify_expired,lifecycle,过期票据验签,DENY,DENY,CAPABILITY_EXPIRED,False,0,401,401,True,5.96,2026-10-20T01:25:41
