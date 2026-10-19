@@ -98,6 +98,24 @@ def run_round(n_threads, round_id, agent):
 
 def main():
     agent = Agent(RUNTIME_DIR, "http://127.0.0.1:8000", BASE_BROKER)
+
+    print("=== 自动重置 B 系统环境并灌入初始数据 (防止只能跑一次的问题) ===")
+    import subprocess
+    root_dir = Path(__file__).resolve().parent.parent.parent
+    env = os.environ.copy()
+    _env_path = root_dir / "credential-broker" / ".env"
+    if _env_path.exists():
+        with open(_env_path, "r") as f:
+            for line in f:
+                if line.startswith("BROKER_ADMIN_TOKEN="):
+                    env["BROKER_ADMIN_TOKEN"] = line.strip().split("=")[1]
+                    break
+    env["MOCK_GIT_TOKEN"] = "mock-git-secret"
+    env["MOCK_DB_TOKEN"] = "mock-db-secret"
+
+    subprocess.run(["bash", "scripts/reset.sh"], cwd=str(root_dir / "credential-broker"), env=env, stdout=subprocess.DEVNULL)
+    subprocess.run(["bash", "scripts/seed.sh"], cwd=str(root_dir / "credential-broker"), env=env, stdout=subprocess.DEVNULL)
+    print("=== 环境重置完毕，开始测试 ===")
     rows = []
     for level in CONCURRENCY_LEVELS:
         for r in range(1, ROUNDS_PER_LEVEL + 1):
