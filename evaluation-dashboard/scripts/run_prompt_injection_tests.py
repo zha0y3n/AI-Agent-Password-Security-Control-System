@@ -4,13 +4,13 @@ import json
 import time
 import requests
 import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../credential-broker/scripts")))
 from pathlib import Path
 from datetime import datetime
+from e2e_demo_lib import Agent, http, SignedCapability, forged_proof
 
 BROKER_DIR = Path(__file__).resolve().parent.parent.parent / "credential-broker"
-sys.path.insert(0, str(BROKER_DIR))
-
-from scripts.e2e_demo_lib import Agent, http, SignedCapability, forged_proof
 
 BASE_BROKER = "http://127.0.0.1:8080"
 BASE_MOCK = "http://127.0.0.1:9090"
@@ -23,17 +23,20 @@ def main():
 
     rows = []
     
-    def add_row(case_id, desc, passed, error_code, detail=""):
+    def add_row(case_id, desc, passed, error_code, detail="", side_effect_count=0):
         rows.append({
             "case_id": case_id,
+            "category": "prompt_injection",
             "description": desc,
-            "passed": passed,
+            "expected_decision": "DENY",
+            "actual_decision": "DENY" if passed else "ALLOW",
             "error_code": error_code or "",
+            "credential_accessed": False,
+            "side_effect_count": side_effect_count,
+            "passed": passed,
             "detail": detail,
             "timestamp": datetime.now().isoformat(timespec="seconds")
         })
-        mark = "PASS" if passed else "FAIL"
-        print(f"[{mark}] {case_id:25s} {error_code or ''}")
 
     # Case 1: AA 拒绝签发越权请求
     request = agent.request()

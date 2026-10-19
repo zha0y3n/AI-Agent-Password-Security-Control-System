@@ -21,12 +21,10 @@ VALID_REQUEST = {
     "credential_id": "github-prod",
 }
 
-
 def issue(req, ttl=60):
     r = requests.post(f"{BASE}/v1/capabilities/issue",
                       json={"request": req, "ttl_seconds": ttl}, timeout=5)
     return r.json()
-
 
 def verify(capability, request, expected_audience):
     r = requests.post(
@@ -43,7 +41,6 @@ def verify(capability, request, expected_audience):
     except Exception:
         return r.status_code, r.text
 
-
 def show(name, code, body):
     print(f"\n--- {name} ---")
     print(f"HTTP {code}")
@@ -51,7 +48,6 @@ def show(name, code, body):
         print(json.dumps(body, indent=2, ensure_ascii=False)[:400])
     else:
         print(str(body)[:400])
-
 
 # 先签发一个合法 Capability
 capability = issue(copy.deepcopy(VALID_REQUEST))

@@ -6,13 +6,13 @@ import threading
 import time
 import requests
 import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../credential-broker/scripts")))
 from pathlib import Path
 from datetime import datetime
+from e2e_demo_lib import Agent, http, SignedCapability
 
 BROKER_DIR = Path(__file__).resolve().parent.parent.parent / "credential-broker"
-sys.path.insert(0, str(BROKER_DIR))
-
-from scripts.e2e_demo_lib import Agent, http, SignedCapability
 
 BASE_BROKER = "http://127.0.0.1:8080"
 BASE_MOCK = "http://127.0.0.1:9090"
@@ -89,12 +89,19 @@ def run_round(round_id, agent):
 
     return {
         "round": round_id,
+        "case_id": f"revocation_{round_id}",
+        "category": "revocation",
+        "expected_decision": "ALLOW", 
+        "actual_decision": "ALLOW" if ex_decision else "DENY",
+        "error_code": ex_error or "",
+        "credential_accessed": ex_code == 200 and ex_decision,
+        "side_effect_count": side_effects,
         "execute_http": ex_code,
         "execute_allowed": ex_decision,
         "execute_error": ex_error or "",
         "revoke_http": results.get("revoke", (0, {}))[0],
-        "side_effects": side_effects,
         "safe": safe,
+        "passed": safe,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
     }
 
@@ -106,7 +113,7 @@ def main():
         rows.append(row)
         mark = "PASS" if row["safe"] else "FAIL"
         print(f"[{mark}] round={i:2d} execute={row['execute_allowed']} "
-              f"error={row['execute_error']:25s} side_effects={row['side_effects']}")
+              f"error={row['execute_error']:25s} side_effects={row['side_effect_count']}")
 
     with open("evaluation-dashboard/results/revocation.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=rows[0].keys())

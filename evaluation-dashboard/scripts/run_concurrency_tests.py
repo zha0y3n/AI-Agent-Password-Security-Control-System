@@ -5,14 +5,14 @@ import threading
 import time
 import requests
 import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../credential-broker/scripts")))
 from pathlib import Path
 from datetime import datetime
+from e2e_demo_lib import Agent, http, SignedCapability
 
 # 把 B 的目录加到 sys.path
 BROKER_DIR = Path(__file__).resolve().parent.parent.parent / "credential-broker"
-sys.path.insert(0, str(BROKER_DIR))
-
-from scripts.e2e_demo_lib import Agent, http, SignedCapability
 
 BASE_BROKER = "http://127.0.0.1:8080"
 BASE_MOCK = "http://127.0.0.1:9090"
@@ -77,11 +77,16 @@ def run_round(n_threads, round_id, agent):
     return {
         "concurrency": n_threads,
         "round": round_id,
+        "case_id": f"concurrency_{n_threads}_{round_id}",
+        "category": "concurrency",
         "total_requests": n_threads,
         "success_count": success_count,
+        "actual_decision": "ALLOW" if success_count > 0 else "DENY",
         "replay_reject_count": replay_count,
         "other_count": other_count,
-        "side_effects": side_effects,
+        "error_code": "CHALLENGE_USED" if replay_count > 0 else "",
+        "credential_accessed": success_count > 0,
+        "side_effect_count": side_effects,
         "duration_s": round(duration, 3),
         "passed": passed,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -98,7 +103,7 @@ def main():
             print(f"[{mark}] n={level:3d} round={r} "
                   f"success={row['success_count']} "
                   f"replay={row['replay_reject_count']} "
-                  f"side_effects={row['side_effects']} "
+                  f"side_effects={row['side_effect_count']} "
                   f"duration={row['duration_s']}s")
 
     with open("evaluation-dashboard/results/concurrency.csv", "w", newline="", encoding="utf-8") as f:

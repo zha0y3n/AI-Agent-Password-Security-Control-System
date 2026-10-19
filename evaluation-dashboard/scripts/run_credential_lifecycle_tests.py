@@ -1,4 +1,4 @@
-"""凭据生命周期测试，输出 credential_lifecycle.csv"""
+"""凭据生命周期测试，输出 credential_lifecycle.csv。"""
 import csv
 import os
 import time
@@ -8,10 +8,10 @@ from datetime import datetime
 BASE = "http://127.0.0.1:8080"
 ADMIN_TOKEN = os.environ.get("BROKER_ADMIN_TOKEN", "")
 
-FIELDS = ["case_id", "category", "description", "expected_http",
-          "actual_http", "expected_error", "actual_error",
-          "passed", "latency_ms", "timestamp"]
-
+FIELDS = ["case_id", "category", "description", 
+          "expected_decision", "actual_decision", "error_code", 
+          "credential_accessed", "side_effect_count",
+          "expected_http", "actual_http", "passed", "latency_ms", "timestamp"]
 
 def call(method, path, json_body=None, admin=False):
     headers = {}
@@ -27,7 +27,6 @@ def call(method, path, json_body=None, admin=False):
         body = {}
     return r.status_code, body, lat
 
-
 def record(case_id, category, desc, expected_http, expected_error,
            actual_http, actual_body, latency_ms):
     actual_error = None
@@ -39,15 +38,17 @@ def record(case_id, category, desc, expected_http, expected_error,
         "case_id": case_id,
         "category": category,
         "description": desc,
+        "expected_decision": "ALLOW" if expected_http in (200, 201) else "DENY",
+        "actual_decision": "ALLOW" if actual_http in (200, 201) else "DENY",
+        "error_code": actual_error or "",
+        "credential_accessed": False,
+        "side_effect_count": 0,
         "expected_http": expected_http,
         "actual_http": actual_http,
-        "expected_error": expected_error or "",
-        "actual_error": actual_error or "",
         "passed": passed,
         "latency_ms": latency_ms,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
     }
-
 
 def main():
     cid = f"github-prod-{int(time.time())}"
@@ -95,12 +96,20 @@ def main():
     http, body, lat = call("GET", "/v1/audit?limit=1000")
     audit_ok = (http == 200 and isinstance(body, dict)
                 and len(body.get("records", [])) >= 4)
+    
     rows.append({
-        "case_id": "audit_chain", "category": "audit",
+        "case_id": "audit_chain", 
+        "category": "audit",
         "description": "审计记录 >= 4 条",
-        "expected_http": 200, "actual_http": http,
-        "expected_error": "", "actual_error": "",
-        "passed": audit_ok, "latency_ms": lat,
+        "expected_decision": "ALLOW",
+        "actual_decision": "ALLOW",
+        "error_code": "",
+        "credential_accessed": False,
+        "side_effect_count": 0,
+        "expected_http": 200, 
+        "actual_http": http,
+        "passed": audit_ok, 
+        "latency_ms": lat,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
     })
 
@@ -114,9 +123,8 @@ def main():
     for r in rows:
         mark = "PASS" if r["passed"] else "FAIL"
         print(f"[{mark}] {r['case_id']:22s} HTTP {r['actual_http']} "
-              f"{r['actual_error'] or ''}")
+              f"{r['error_code'] or ''}")
     print(f"\n已生成 credential_lifecycle.csv：{passed}/{len(rows)} passed")
-
 
 if __name__ == "__main__":
     main()

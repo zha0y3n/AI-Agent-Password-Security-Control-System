@@ -34,8 +34,12 @@ def run(cid, cat, desc, cap, req, aud, eh, ee):
     mark = "PASS" if passed else "FAIL"
     print(f"[{mark}] {cid:25s} HTTP {http} {err or ''} ({lat}ms)")
     return {"case_id": cid, "category": cat, "description": desc,
+            "expected_decision": "ALLOW" if eh == 200 else "DENY",
+            "actual_decision": "ALLOW" if http == 200 else "DENY",
+            "error_code": err or "",
+            "credential_accessed": False,
+            "side_effect_count": 0,
             "expected_http": eh, "actual_http": http,
-            "expected_error": ee or "", "actual_error": err or "",
             "passed": passed, "latency_ms": lat,
             "timestamp": datetime.now().isoformat(timespec="seconds")}
 
