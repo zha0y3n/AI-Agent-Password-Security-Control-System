@@ -95,7 +95,7 @@ def run_round(n_threads, round_id, agent):
 def main():
     agent = Agent(RUNTIME_DIR, "http://127.0.0.1:8000", BASE_BROKER)
 
-    print("=== 自动重置 B 系统环境并灌入初始数据 (防止只能跑一次的问题) ===")
+    # 自动重置 B 系统环境并灌入初始数据 (防止只能跑一次的问题)
     import subprocess
     root_dir = Path(__file__).resolve().parent.parent.parent
     env = os.environ.copy()

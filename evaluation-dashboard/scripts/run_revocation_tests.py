@@ -16,7 +16,7 @@ BROKER_DIR = Path(__file__).resolve().parent.parent.parent / "credential-broker"
 
 BASE_BROKER = "http://127.0.0.1:8080"
 BASE_MOCK = "http://127.0.0.1:9090"
-# 自动尝试从 credential-broker/.env 读取 ADMIN_TOKEN，防止评委忘记 source
+
 _env_path = Path(__file__).resolve().parent.parent.parent / "credential-broker" / ".env"
 if _env_path.exists() and not os.environ.get("BROKER_ADMIN_TOKEN"):
     with open(_env_path, "r") as _f:
@@ -117,7 +117,7 @@ def run_round(round_id, agent):
 def main():
     agent = Agent(RUNTIME_DIR, "http://127.0.0.1:8000", BASE_BROKER)
 
-    print("=== 自动重置 B 系统环境并灌入初始数据 (防止只能跑一次的问题) ===")
+    # 自动重置 B 系统环境并灌入初始数据 (防止只能跑一次的问题)
     import subprocess
     root_dir = Path(__file__).resolve().parent.parent.parent
     env = os.environ.copy()
