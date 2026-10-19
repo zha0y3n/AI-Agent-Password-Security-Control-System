@@ -18,7 +18,7 @@ BASE_BROKER = "http://127.0.0.1:8080"
 BASE_MOCK = "http://127.0.0.1:9090"
 RUNTIME_DIR = BROKER_DIR.parent / ".runtime"
 
-CONCURRENCY_LEVELS = [10, 50, 100, 200]
+CONCURRENCY_LEVELS = [10, 50, 100, 200, 500]
 ROUNDS_PER_LEVEL = 3
 
 def run_round(n_threads, round_id, agent):
