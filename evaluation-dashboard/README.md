@@ -4,10 +4,10 @@
 
 ## 📂 目录结构
 
-- `scripts/`：所有测试与实验脚本。
+- `scripts/`：所有测试与实验执行脚本。
 - `tests/`：pytest 格式的基础单元测试。
 - `dashboard/`：Streamlit 可视化面板。
-- `results/`：测试生成的 CSV 数据文件（需在本地运行脚本后生成）。
+- `contracts/`：跨模块接口与数据格式约定。
 
 ## 🚀 如何复现测试
 
