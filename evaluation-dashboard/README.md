@@ -36,16 +36,28 @@ source .venv/bin/activate
 
 # 1. AA 接口安全测试
 python evaluation-dashboard/scripts/run_security_tests.py
+sleep 1
+
 # 2. AA 验签接口安全测试
 python evaluation-dashboard/scripts/run_verify_tests.py
+sleep 1
+
 # 3. 凭据生命周期测试
 python evaluation-dashboard/scripts/run_credential_lifecycle_tests.py
+sleep 1
+
 # 4. 并发重放测试
 python evaluation-dashboard/scripts/run_concurrency_tests.py
+sleep 1
+
 # 5. 性能压测
 python evaluation-dashboard/scripts/run_performance_tests.py
+sleep 1
+
 # 6. 撤销竞态测试
 python evaluation-dashboard/scripts/run_revocation_tests.py
+sleep 1
+
 # 7. 提示注入越权测试
 python evaluation-dashboard/scripts/run_prompt_injection_tests.py
 ```
