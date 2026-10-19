@@ -4,6 +4,7 @@
 
 ## 目录结构
 
+- `requirements.txt`：本模块所需的 Python 依赖文件。
 - `scripts/`：所有测试与实验执行脚本。
 - `tests/`：pytest 格式的基础单元测试。
 - `dashboard/`：Streamlit 可视化面板。
