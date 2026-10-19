@@ -21,19 +21,16 @@ VALID_REQUEST = {
     "credential_id": "github-prod",
 }
 
-
 def check_health():
     r = requests.get(f"{BASE}/health", timeout=5)
     print(f"[health] {r.status_code} {r.json()}")
     return r.status_code == 200
-
 
 def check_public_key():
     r = requests.get(f"{BASE}/v1/public-keys/aa-key-demo-01", timeout=5)
     data = r.json()
     print(f"[public-key] key_id={data.get('key_id')} status={data.get('status')}")
     return r.status_code == 200
-
 
 def check_issue_capability():
     payload = {"request": VALID_REQUEST, "ttl_seconds": 60}
@@ -52,7 +49,6 @@ def check_issue_capability():
     print(f"  expires_at    = {body.get('expires_at')}")
     print(f"  one_time      = {body.get('one_time')}")
     return True
-
 
 if __name__ == "__main__":
     print(f"=== C smoke test @ {datetime.now().isoformat(timespec='seconds')} ===")

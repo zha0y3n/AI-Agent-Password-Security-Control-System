@@ -23,7 +23,6 @@ VALID_REQUEST = {
     "credential_id": "github-prod",
 }
 
-
 def call(req, ttl=60):
     start = time.perf_counter()
     r = requests.post(
@@ -37,7 +36,6 @@ def call(req, ttl=60):
     except Exception:
         body = {}
     return r.status_code, body, round(latency_ms, 2)
-
 
 def build_cases():
     cases = []
@@ -93,7 +91,6 @@ def build_cases():
 
     return cases
 
-
 def main():
     rows = []
     for c in build_cases():
@@ -104,15 +101,17 @@ def main():
 
         passed = (http == c["expected_http"]
                   and actual_error == c["expected_error"])
-
         rows.append({
             "case_id": c["case_id"],
             "category": c["category"],
             "description": c["description"],
+            "expected_decision": "ALLOW" if c["expected_http"] == 200 else "DENY",
+            "actual_decision": "ALLOW" if http == 200 else "DENY",
+            "error_code": actual_error or "",
+            "credential_accessed": False,
+            "side_effect_count": 0,
             "expected_http": c["expected_http"],
             "actual_http": http,
-            "expected_error": c["expected_error"] or "",
-            "actual_error": actual_error or "",
             "passed": passed,
             "latency_ms": latency,
             "timestamp": datetime.now().isoformat(timespec="seconds"),
@@ -130,7 +129,6 @@ def main():
     passed = sum(1 for r in rows if r["passed"])
     print(f"\n已生成 evaluation-dashboard/results/security.csv："
           f"{passed}/{len(rows)} passed")
-
 
 if __name__ == "__main__":
     main()

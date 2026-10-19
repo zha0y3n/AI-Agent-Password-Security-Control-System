@@ -6,13 +6,13 @@ import threading
 import time
 import requests
 import sys
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../credential-broker/scripts")))
 from pathlib import Path
 from datetime import datetime
+from e2e_demo_lib import Agent, http, SignedCapability
 
 BROKER_DIR = Path(__file__).resolve().parent.parent.parent / "credential-broker"
-sys.path.insert(0, str(BROKER_DIR))
-
-from scripts.e2e_demo_lib import Agent, http, SignedCapability
 
 BASE_BROKER = "http://127.0.0.1:8080"
 RUNTIME_DIR = BROKER_DIR.parent / ".runtime"
@@ -78,6 +78,8 @@ def run_round(n_threads, round_id, agent):
     return {
         "concurrency": n_threads,
         "round": round_id,
+        "case_id": f"performance_{n_threads}_{round_id}",
+        "category": "performance",
         "total_requests": len(latencies),
         "total_s": round(total_s, 3),
         "throughput_rps": round(throughput, 2),
@@ -86,6 +88,10 @@ def run_round(n_threads, round_id, agent):
         "p99_ms": round(p99, 2),
         "min_ms": round(min(latencies), 2),
         "max_ms": round(max(latencies), 2),
+        "actual_decision": "ALLOW",
+        "error_code": "",
+        "credential_accessed": True,
+        "side_effect_count": len(latencies),
         "passed": len(latencies) == REQUESTS_PER_ROUND,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
     }

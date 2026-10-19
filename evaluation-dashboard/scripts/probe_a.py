@@ -21,7 +21,6 @@ VALID_REQUEST = {
     "credential_id": "github-prod",
 }
 
-
 def issue(req, ttl=60):
     r = requests.post(f"{BASE}/v1/capabilities/issue",
                       json={"request": req, "ttl_seconds": ttl}, timeout=5)
@@ -31,7 +30,6 @@ def issue(req, ttl=60):
         body = r.text
     return r.status_code, body
 
-
 def show(name, req, ttl=60):
     code, body = issue(req, ttl)
     print(f"\n--- {name} ---")
@@ -40,7 +38,6 @@ def show(name, req, ttl=60):
         print(json.dumps(body, indent=2, ensure_ascii=False)[:600])
     else:
         print(body[:600])
-
 
 # 1. 正常
 show("normal", VALID_REQUEST)
