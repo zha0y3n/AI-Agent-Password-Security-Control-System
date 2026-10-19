@@ -2,50 +2,49 @@
 
 本目录包含针对 A（授权服务）与 B（Broker + Vault）的完整独立攻击测试、并发/性能实验脚本，以及结果可视化 Dashboard。
 
-## 目录结构
+## 📂 目录结构
 
 - `requirements.txt`：本模块所需的 Python 依赖文件。
-- `scripts/`：所有测试与实验执行脚本。
+- `scripts/`：所有测试与实验执行脚本（含一键启动脚本）。
 - `tests/`：pytest 格式的基础单元测试。
 - `dashboard/`：Streamlit 可视化面板。
 - `contracts/`：跨模块接口与数据格式约定。
 - `results/`：已交付的 7 份真实实验数据（CSV），可直接查看。
 
-## 如何复现测试
+## 🚀 如何复现测试
 
-**前置条件**：请确保 A、B 相关服务均已启动，且 B 的 `.env` 配置正确。
+**前置条件**：如果你是在全新环境（刚 clone 代码），必须先启动 A 的 AA 服务和 B 的 Broker/Mock 服务。我们提供了一个**一键启动脚本**，它会自动建虚拟环境、生成密钥、启动 3 个服务并灌入初始数据。
 
-1. 激活 Python 虚拟环境：
-   ```bash
-   source .venv/bin/activate
-   ```
-2. 初始化实验数据：
-   在运行测试前，必须加载 B 的环境变量，并重置 B 的数据库、灌入与 A 对齐的初始凭据。
-   ```bash
-   set -a; . credential-broker/.env; set +a
-   cd credential-broker
-   bash scripts/reset.sh
-   bash scripts/seed.sh
-   cd ..
-   ```
-3. 运行各类实验脚本：   
-   ```bash
-   # 1. AA 接口安全测试
-   python evaluation-dashboard/scripts/run_security_tests.py
-   # 2. AA 验签接口安全测试
-   python evaluation-dashboard/scripts/run_verify_tests.py
-   # 3. 凭据生命周期测试
-   python evaluation-dashboard/scripts/run_credential_lifecycle_tests.py
-   # 4. 并发重放测试
-   python evaluation-dashboard/scripts/run_concurrency_tests.py
-   # 5. 性能压测
-   python evaluation-dashboard/scripts/run_performance_tests.py
-   # 6. 撤销竞态测试
-   python evaluation-dashboard/scripts/run_revocation_tests.py
-   # 7. 提示注入越权测试
-   python evaluation-dashboard/scripts/run_prompt_injection_tests.py
-   ```
-## 查看可视化 Dashboard
+在项目根目录执行：
+
+```bash
+bash evaluation-dashboard/scripts/start_all_services.sh
+```
+
+*(注：如果使用 Docker，可直接参考根目录 README 的 Docker Compose 说明。)*
+
+**服务启动后，运行各类实验脚本：**
+
+```bash
+source .venv/bin/activate
+
+# 1. AA 接口安全测试
+python evaluation-dashboard/scripts/run_security_tests.py
+# 2. AA 验签接口安全测试
+python evaluation-dashboard/scripts/run_verify_tests.py
+# 3. 凭据生命周期测试
+python evaluation-dashboard/scripts/run_credential_lifecycle_tests.py
+# 4. 并发重放测试
+python evaluation-dashboard/scripts/run_concurrency_tests.py
+# 5. 性能压测
+python evaluation-dashboard/scripts/run_performance_tests.py
+# 6. 撤销竞态测试
+python evaluation-dashboard/scripts/run_revocation_tests.py
+# 7. 提示注入越权测试
+python evaluation-dashboard/scripts/run_prompt_injection_tests.py
+```
+
+## 📊 查看可视化 Dashboard
 
 运行命令启动：
 
@@ -55,6 +54,6 @@ streamlit run evaluation-dashboard/dashboard/app.py --server.address 0.0.0.0
 
 在浏览器中访问 http://localhost:8501 即可查看图表。
 
-## 测试核心理念
+## 🛡️ 测试核心理念
 
-C 模块不仅校验 HTTP 状态码，还严格检查底层真实副作用（side_effects），确保在任何攻击下，底层业务数据绝未发生越权篡改。
+C 模块不仅校验 HTTP 状态码，还严格检查底层真实副作用（`side_effects`），确保在任何攻击下，底层业务数据绝未发生越权篡改。
