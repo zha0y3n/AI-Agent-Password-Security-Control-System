@@ -1,11 +1,12 @@
 """C 的凭据生命周期测试，输出 credential_lifecycle.csv。"""
 import csv
+import os
 import time
 import requests
 from datetime import datetime
 
 BASE = "http://127.0.0.1:8080"
-ADMIN_TOKEN = "8c7da82a21655ea765939f69c2a3e518a8325627f43676bc"
+ADMIN_TOKEN = os.environ.get("BROKER_ADMIN_TOKEN", "")
 
 FIELDS = ["case_id", "category", "description", "expected_http",
           "actual_http", "expected_error", "actual_error",

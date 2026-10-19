@@ -1,5 +1,6 @@
 """C 的撤销竞态测试：执行与撤销并发发生。"""
 import csv
+import os
 import json
 import threading
 import time
@@ -15,7 +16,7 @@ from scripts.e2e_demo_lib import Agent, http, SignedCapability
 
 BASE_BROKER = "http://127.0.0.1:8080"
 BASE_MOCK = "http://127.0.0.1:9090"
-ADMIN_TOKEN = "8c7da82a21655ea765939f69c2a3e518a8325627f43676bc"
+ADMIN_TOKEN = os.environ.get("BROKER_ADMIN_TOKEN", "")
 RUNTIME_DIR = BROKER_DIR.parent / ".runtime"
 
 ROUNDS = 20
