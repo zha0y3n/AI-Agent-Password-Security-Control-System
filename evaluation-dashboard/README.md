@@ -26,14 +26,13 @@ cd AI-Agent-Password-Security-Control-System
 请在项目根目录执行：
 ```bash
 bash evaluation-dashboard/scripts/start_all_services.sh
+source .venv/bin/activate
 ```
 *（等待脚本输出 "🎉 环境准备完毕，服务已全部启动！" 即可进行下一步）*
 
 **步骤 3：运行各类实验脚本**
 服务启动后，运行以下命令进行测试：
 ```bash
-source .venv/bin/activate
-
 # 1. AA 接口安全测试
 python evaluation-dashboard/scripts/run_security_tests.py
 sleep 1
