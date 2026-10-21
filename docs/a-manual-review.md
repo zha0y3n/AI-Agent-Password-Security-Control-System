@@ -8,7 +8,7 @@
 4. **请求哈希覆盖范围**：当前包含 `request_id`、Agent/Task 和 Credential ID。确认 B 执行层不会重建/省略字段后再哈希。
 5. **TTL/时钟**：Capability 最大 300 秒、示例策略 60 秒，Python verifier 容忍未来 `issued_at` 5 秒但过期边界严格为 `now >= expires_at`。确认比赛部署的时钟同步和 skew。
 6. **Challenge**：格式为 16～32 字节小写 hex，生产由 Broker 生成并原子消费。需要确定 Challenge API、绑定会话、过期清理和失败重试。
-7. **Credential Epoch 来源**：首轮 AA 从可信任务策略绑定 epoch=17；Broker 必须按执行时实时状态复核。需要确定 AA 是否查询 B 的 epoch、使用签名快照，还是只由 B 最终判定。
+7. **Credential Epoch 来源**：A 已实现可选的 Broker Status 查询，在精确可信任务匹配后把实时 `ACTIVE` epoch 签入 Capability；默认演示仍为固定 epoch。请确认生产是否强制启用该模式、Status 端点的 TLS/mTLS/SPIFFE 身份与缓存上限。Broker 必须始终在执行时实时原子复核，不能信任 AA 查询替代该检查。
 8. **一次性和幂等**：Capability 声明 `one_time=true`，但 A 不实现 B 的 CAS。请审核外部 API 幂等键、`CONSUMING` 崩溃恢复和撤销线性化点。
 9. **回执结果摘要**：Receipt 字段已固定，但业务 `result_envelope` schema 未固定。B/C 联审前不要把 result hash 当作完整可验证业务语义。
 10. **密钥生命周期**：注册模型支持 ACTIVE/REVOKED 和时间窗，但尚无轮换 API/证书链/HSM。生产 demo 前必须审核密钥托管和旧公钥保留窗口。

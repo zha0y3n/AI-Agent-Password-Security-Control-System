@@ -67,6 +67,12 @@ ok := sm2.VerifyASN1WithSM2(pub, []byte("1234567812345678"), message, signatureD
 
 Body 覆盖：协议版本、Capability ID、Issuer/Key、Audience、Agent/Key、Task、Service、Resource、Operation、RequestHash、Credential ID/Epoch、issued/expires/TTL、Nonce 和 `one_time=true`。
 
+### 4.1 Credential Epoch 的签发来源
+
+CapabilityBody 的 `credential_epoch` 是签名覆盖字段，不能由 Agent 提供或在签名后改写。AA 的可信任务只决定允许使用哪个 Credential 与哪个 Broker audience。部署启用实时生命周期联动时，AA 在完成该可信任务的精确匹配后，从该 audience 的受保护 Broker Status 端点获得当前 `ACTIVE` Credential epoch，再将其签入 Capability。查询失败或返回非 ACTIVE 状态必须拒绝签发。
+
+该预检查不替代 Broker 执行时与 Capability 消费同一事务中的 `ACTIVE + epoch` 原子校验；后者是轮换/撤销竞态的最终线性化点。Status 端点的固定响应字段与传输身份要求见 `docs/a-b-interface.md`。
+
 ## 5. Holder Proof
 
 Broker 先生成不可预测 Challenge，并在可信状态存储中记录其 audience、过期时间和未消费状态。Agent 对完整 `HolderProofBody` 签名。Body 同时绑定：
