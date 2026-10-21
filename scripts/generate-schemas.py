@@ -8,6 +8,7 @@ from pathlib import Path
 
 from agent_aa.models import (
     AgentRequest,
+    CredentialStatus,
     ExecutionBundle,
     HolderProof,
     SignedCapability,
@@ -19,6 +20,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "shared" / "schemas"
 MODELS = {
     "agent-request.schema.json": AgentRequest,
+    "credential-status.schema.json": CredentialStatus,
     "task-context.schema.json": TaskContext,
     "signed-capability.schema.json": SignedCapability,
     "holder-proof.schema.json": HolderProof,
