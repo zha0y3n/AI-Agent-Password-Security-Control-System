@@ -116,8 +116,13 @@ def load_runtime(directory: Path) -> tuple[AuthorizationAuthority, KeyRegistry, 
     aa_key = load_private_key_pem((directory / "aa-private-key.pem").read_bytes())
     status_resolver = None
     if config.credential_status_mode == "BROKER_LIVE":
+        # Retired tasks must not prevent AA from starting: only audiences that
+        # can still be authorized need a live Broker status endpoint.
         required_audiences = {
-            action.audience for task in task_store.document().tasks for action in task.allowed_actions
+            action.audience
+            for task in task_store.document().tasks
+            if task.status == "ACTIVE"
+            for action in task.allowed_actions
         }
         missing_audiences = required_audiences.difference(config.broker_status_endpoints)
         if missing_audiences:
