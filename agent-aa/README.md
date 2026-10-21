@@ -1,11 +1,158 @@
-# agent-aa
+# agent-aa：Agent + Authorization Authority（A）
 
-A 模块包含可靠的固定任务 Agent、Authorization Authority、严格协议模型、可信策略、SM2/SM3 封装、Holder Proof、执行回执参考验证、FastAPI 和 CLI。
+A 模块负责“把用户任务变成明确请求，并签发一张只能用于该任务、该 Agent、该 Broker、该 Credential 版本的一次性授权票据”。A 不实现 Broker/Vault，也不持有目标业务长期 Credential。
 
-```bash
-pip install -e '.[dev]'
-pytest -q
-agent-aa demo
+当前完整度：**95%**（A 范围实现完成；与真实 B 的生命周期联调仍待进行）。
+
+## 组件
+
+```text
+agent.py       固定任务 Agent：生成确定性 AgentRequest
+policy.py      服务端可信 TaskStore + 精确匹配授权策略
+authority.py   Capability 签发与 Python 参考验签
+holder.py      Holder Proof 生成/校验
+receipt.py     Execution Receipt 结构与参考验签
+models.py      严格 Pydantic 协议模型
+canonical.py   ZTCANON-JSON-v1
+crypto.py      铜锁 SM2/SM3 封装
+lifecycle.py   Broker Credential Status 失败关闭查询
+runtime.py     开发运行目录与 STATIC_DEMO / BROKER_LIVE 配置
+api.py         FastAPI 接口
+cli.py         init-demo / runtime-demo / demo / serve
 ```
 
-AA 服务只读取 AA 私钥、公共密钥注册表和可信任务库。`agent-private-key.pem` 仅供本地 `runtime-demo` 模拟独立 Agent，`serve` 不加载它。生产环境应将 Agent 私钥移入独立 Holder Signer/HSM，并替换文件型开发密钥存储。
+## 数据流
+
+```text
+固定任务
+  → DeterministicAgent 生成 AgentRequest
+  → AA 从服务端 TaskStore 读取 TaskContext
+  → 策略精确匹配 AllowedAction
+  → （可选）查询 Broker 当前 ACTIVE Credential epoch
+  → 构造 CapabilityBody 并用 AA SM2 私钥签名
+  → Agent 用 Holder 私钥生成 Holder Proof
+  → 交给 Broker 校验
+```
+
+Capability 绑定：Agent/Key、Task、Service、Resource、Operation、RequestHash、Audience、Credential ID/Epoch、TTL、Nonce、`one_time=true`。
+
+Holder Proof 绑定：Capability 哈希、实际请求哈希、Broker Audience、Challenge、有效期。
+
+## 安装与验证
+
+要求 Python 3.11+。密码原语使用铜锁 `tongsuopy==1.0.1`，不包含自研 SM2/SM3/SM4。
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e './agent-aa[dev]'
+.venv/bin/pytest agent-aa/tests -q     # 50 passed
+.venv/bin/agent-aa demo                # verified: true
+```
+
+若 PyPI 默认镜像不可达，可显式指定镜像：
+
+```bash
+.venv/bin/pip install -i https://mirrors.aliyun.com/pypi/simple -e './agent-aa[dev]'
+```
+
+## 运行 AA
+
+```bash
+.venv/bin/agent-aa init-demo --directory .runtime
+.venv/bin/agent-aa serve --directory .runtime --host 127.0.0.1 --port 8000
+# 或
+bash scripts/run-a.sh
+```
+
+`init-demo` 会在 gitignored 的 `.runtime/` 中生成 AA/Agent 私钥、公钥表和可信任务库。私钥文件会尝试设为 `0600`；Windows/WSL 挂载盘可能仍报告 `0777`，此时 CLI 会告警。生产环境必须改用 Linux 访问控制、Secret Manager 或 HSM/独立签名器。
+
+接口：
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| GET | `/health` | 健康检查 |
+| GET | `/v1/public-keys/{key_id}` | AA/Agent 公钥查询 |
+| POST | `/v1/capabilities/issue` | 请求体只接受 `AgentRequest + ttl_seconds`；可信 TaskContext 从 AA 本地读取 |
+| POST | `/v1/capabilities/verify` | Python 参考验签（正式校验点是 Broker） |
+| POST | `/v1/receipts/verify` | Broker Receipt 验签 |
+
+完整字段与校验顺序见 [../docs/a-b-interface.md](../docs/a-b-interface.md)。
+
+## Credential Epoch 的两种模式
+
+### STATIC_DEMO（默认）
+
+`init-demo` 生成 `STATIC_DEMO` 配置，可信任务中的 `credential_epoch=17` 固定不变，便于没有 Broker 的 A 端演示。**生产签发不得依赖固定 epoch。**
+
+### BROKER_LIVE（可选）
+
+部署时把 `.runtime/config.json` 改为：
+
+```json
+{
+  "credential_status_mode": "BROKER_LIVE",
+  "broker_status_endpoints": {
+    "broker-01": "https://broker.internal.example"
+  },
+  "broker_status_timeout_seconds": 2,
+  "allow_insecure_broker_status_urls": false
+}
+```
+
+AA 只在 AgentRequest 已完整匹配服务端 `AllowedAction` 后，查询该 audience 对应的：
+
+```text
+GET /v1/credentials/{credential_id}/status
+Accept: application/json
+```
+
+响应必须严格为：
+
+```json
+{
+  "credential_id": "github-prod",
+  "provider": "git",
+  "status": "ACTIVE",
+  "credential_epoch": 18,
+  "created_at": 2000000000,
+  "updated_at": 2000000010
+}
+```
+
+失败关闭规则：
+
+- `CREDENTIAL_STATUS_UNAVAILABLE`：超时、网络错误、重定向、非 200、未配置 audience；
+- `CREDENTIAL_STATUS_INVALID`：响应超过 16 KiB、非严格 JSON、缺失/未知字段或类型非法；
+- `CREDENTIAL_STATUS_MISMATCH`：返回的 Credential ID 与可信 Action 不同；
+- `CREDENTIAL_INACTIVE`：状态不是 `ACTIVE`。
+
+默认仅允许 HTTPS；本机 Docker/loopback 如只能使用 HTTP，必须显式设置 `allow_insecure_broker_status_urls=true`，且只能用于开发环境。
+
+**边界：** AA 的签发前查询只缩短状态陈旧窗口，不替代 Broker 在执行事务内对 `ACTIVE + epoch` 的原子复核。
+
+## 测试覆盖
+
+`50 passed` 覆盖：
+
+- Canonical JSON、SM3 已知答案、SM2 正常/篡改、非法 DER；
+- 正常签发、错误资源/Body/Task、TTL、过期、跨任务/服务/资源/操作/路径；
+- RequestHash、Audience、Wrong Holder、Challenge、Proof 过期；
+- Receipt 篡改/验签 API；
+- `BROKER_LIVE` 实时 epoch 绑定、撤销状态拒绝、HTTP/响应/身份错误失败关闭；
+- 先授权后查询、HTTP 开发环境显式 opt-in、Live 模式缺少 audience 端点时拒绝启动；
+- Capability/Holder Proof/Receipt 三类共享向量。
+
+## 限制
+
+- 不接入真实 LLM，使用固定任务 Agent；
+- 文件型私钥只用于本地演示，生产应使用 HSM/Secret Manager/独立 Holder Signer；
+- 不实现 Broker 的 Vault、原子消费、Challenge 存储或系统实验；
+- 与真实 B 的 TLS/mTLS 生命周期联调尚未完成；
+- `result_envelope` 与统一错误码表仍需 A/B/C 联审。
+
+## 相关文档
+
+- [../docs/a-b-interface.md](../docs/a-b-interface.md)：A→B 接口
+- [../docs/crypto-protocol.md](../docs/crypto-protocol.md)：字节级密码协议
+- [../docs/a-progress.md](../docs/a-progress.md)：A 进度
+- [../shared/README.md](../shared/README.md)：共享 Schema 与向量
