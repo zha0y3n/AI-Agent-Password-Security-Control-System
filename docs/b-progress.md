@@ -1,5 +1,7 @@
 # Credential Broker
 
+更新时间：2026-10-22（Asia/Shanghai）。完整度：**92%**。
+
 ## 已完成
 
 | 计划项 | 实现位置 | 说明 |
@@ -32,9 +34,11 @@
 | Broker 公钥记录 | `GET /v1/broker/key-registry` | 以 A 的 `KeyRegistryDocument` 格式公布 PEM SPKI 公钥（解决之前 `04‖X‖Y` 与 PEM 不一致的问题） |
 | 错误码 / HTTP 状态 | `internal/errcode` | 协议码沿用 A；B 扩展生命周期 / 重放 / 上游码；映射表见 `credential-broker/README.md` |
 
-## 阶段三：A + B 联调（B 侧完成）
+## 阶段三：A + B 联调（B 侧完成，待生命周期真实联调）
 
 `scripts/e2e-demo.py` 通过真实 HTTP 跑通 Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit，覆盖重放、幂等、篡改请求、篡改 Capability、被窃取 Capability、伪造 Challenge、提示注入、旧 Epoch，并核对上游调用次数和审计链。
+
+A 已实现可选的 `BROKER_LIVE`：签发前读取 `GET /v1/credentials/{id}/status` 的当前 `ACTIVE` epoch。真实 TLS/mTLS、轮换、撤销和撤销竞态联调仍待完成；B 执行事务内的 `ACTIVE + epoch` 原子检查仍是最终线性化点。
 
 ## 阶段四：面向 C 的支撑（完成，待 C 确认）
 
@@ -43,7 +47,8 @@ Capability 状态查询、审计复核接口、状态重置（`BROKER_ENABLE_RES
 ### 尚待联审
 
 - `result_envelope` 结构与 Receipt 返回方式（B 的提案见 `credential-broker/README.md`），需写入 `shared/`。
-- Credential Epoch 来源：A 的可信任务库写死 17；`seed.sh` 暂时把 `github-prod` 轮换到 17 来对齐。
+- 统一错误码表：A 的 `CREDENTIAL_STATUS_*` 与 B 的 `CREDENTIAL_EPOCH_MISMATCH` / `CREDENTIAL_INACTIVE` 尚未合并成一张表。
+- A 的 `BROKER_LIVE` 已实现，待真实 B 的 TLS/mTLS 生命周期联调；默认 `STATIC_DEMO` 仍把 `github-prod` 对齐到 17。
 
 ## 阶段五：竞赛化（文档完成）
 
