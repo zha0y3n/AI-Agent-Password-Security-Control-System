@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from pathlib import Path
-
 from .canonical import canonical_json, strict_json_loads
 from .errors import AuthorizationDenied
+from .lifecycle import CredentialStatusResolver
 from .models import AgentRequest, AllowedAction, TaskContext, TaskStoreDocument
 
 
@@ -48,8 +48,14 @@ def _matches(action: AllowedAction, request: AgentRequest) -> bool:
 
 
 class AuthorizationPolicy:
-    def __init__(self, task_store: TrustedTaskStore) -> None:
+    def __init__(
+        self,
+        task_store: TrustedTaskStore,
+        *,
+        credential_status_resolver: CredentialStatusResolver | None = None,
+    ) -> None:
         self.task_store = task_store
+        self.credential_status_resolver = credential_status_resolver
 
     def authorize(self, request: AgentRequest, *, ttl_seconds: int, now: int) -> AllowedAction:
         task = self.task_store.get(request.task_id)
@@ -70,4 +76,14 @@ class AuthorizationPolicy:
             raise AuthorizationDenied("TTL_EXCEEDS_POLICY", "requested TTL exceeds the trusted policy limit")
         if now + ttl_seconds > task.expires_at:
             raise AuthorizationDenied("TTL_EXCEEDS_TASK", "capability would outlive its trusted task")
-        return action
+        if self.credential_status_resolver is None:
+            return action
+
+        # Do not query a Broker until the Agent request has already matched an
+        # AA-owned action.  This prevents Agent input from becoming a general
+        # lifecycle-status oracle.
+        current = self.credential_status_resolver.resolve(
+            credential_id=action.credential_id,
+            audience=action.audience,
+        )
+        return action.model_copy(update={"credential_epoch": current.credential_epoch})

@@ -9,7 +9,7 @@ from __future__ import annotations
 import os
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -17,6 +17,7 @@ from .authority import AuthorizationAuthority
 from .canonical import canonical_json, strict_json_loads
 from .crypto import generate_sm2_private_key, load_private_key_pem, save_private_key
 from .keys import KeyRegistry, make_public_key_record
+from .lifecycle import BrokerCredentialStatusResolver
 from .models import AllowedAction, StrictModel, TaskContext, TaskStoreDocument
 from .policy import AuthorizationPolicy, TrustedTaskStore
 
@@ -27,6 +28,10 @@ class RuntimeConfig(StrictModel):
     issuer_key_id: str
     agent_id: str
     agent_key_id: str
+    credential_status_mode: Literal["STATIC_DEMO", "BROKER_LIVE"] = "STATIC_DEMO"
+    broker_status_endpoints: dict[str, str] = Field(default_factory=dict)
+    broker_status_timeout_seconds: int = Field(default=2, ge=1, le=30)
+    allow_insecure_broker_status_urls: bool = False
 
 
 def _write_json(path: Path, value: Any, *, overwrite: bool) -> None:
@@ -109,11 +114,24 @@ def load_runtime(directory: Path) -> tuple[AuthorizationAuthority, KeyRegistry, 
     registry = KeyRegistry.from_path(directory / "public-keys.json")
     task_store = TrustedTaskStore.from_path(directory / "trusted-tasks.json")
     aa_key = load_private_key_pem((directory / "aa-private-key.pem").read_bytes())
+    status_resolver = None
+    if config.credential_status_mode == "BROKER_LIVE":
+        required_audiences = {
+            action.audience for task in task_store.document().tasks for action in task.allowed_actions
+        }
+        missing_audiences = required_audiences.difference(config.broker_status_endpoints)
+        if missing_audiences:
+            raise ValueError("Broker live-status configuration is missing a trusted task audience")
+        status_resolver = BrokerCredentialStatusResolver(
+            config.broker_status_endpoints,
+            timeout_seconds=config.broker_status_timeout_seconds,
+            allow_insecure_http=config.allow_insecure_broker_status_urls,
+        )
     authority = AuthorizationAuthority(
         issuer_id=config.issuer_id,
         issuer_key_id=config.issuer_key_id,
         private_key=aa_key,
-        policy=AuthorizationPolicy(task_store),
+        policy=AuthorizationPolicy(task_store, credential_status_resolver=status_resolver),
         key_registry=registry,
     )
     return authority, registry, task_store, config
