@@ -21,5 +21,10 @@ class AuthorizationDenied(ProtocolError):
     pass
 
 
+class RequestTooLarge(ProtocolError):
+    def __init__(self, message: str = "request body exceeds the configured limit") -> None:
+        super().__init__("REQUEST_TOO_LARGE", message)
+
+
 class VerificationError(ProtocolError):
     pass
