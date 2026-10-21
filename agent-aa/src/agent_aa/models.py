@@ -96,6 +96,28 @@ class AllowedAction(StrictModel):
         return value
 
 
+class CredentialStatus(StrictModel):
+    """Public, non-secret Credential metadata returned by the trusted Broker.
+
+    This is deliberately separate from ``AllowedAction``: the task store
+    authorizes *which* credential may be used, while the Broker remains the
+    authority for its current lifecycle state and epoch.
+    """
+
+    credential_id: Identifier
+    provider: Identifier
+    status: Literal["ACTIVE", "DISABLED", "REVOKED", "COMPROMISED", "DESTROYED"]
+    credential_epoch: PositiveEpoch
+    created_at: Timestamp
+    updated_at: Timestamp
+
+    @model_validator(mode="after")
+    def validate_timestamps(self) -> "CredentialStatus":
+        if self.updated_at < self.created_at:
+            raise ValueError("credential updated_at must not precede created_at")
+        return self
+
+
 class TaskContext(StrictModel):
     """AA-owned context; it is never accepted from the Agent as authority."""
 
