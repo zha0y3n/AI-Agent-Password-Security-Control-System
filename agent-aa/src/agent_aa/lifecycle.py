@@ -8,6 +8,7 @@ time; a lookup here is not a replacement for that linearization point.
 
 from __future__ import annotations
 
+import http.client
 from collections.abc import Callable, Mapping
 from typing import Protocol
 from urllib.error import HTTPError, URLError
@@ -100,7 +101,7 @@ class BrokerCredentialStatusResolver:
         url = f"{endpoint}/v1/credentials/{quote(credential_id, safe='')}/status"
         try:
             http_status, raw = self._fetch(url, self._timeout_seconds)
-        except (OSError, TimeoutError, URLError, ValueError) as exc:
+        except (OSError, TimeoutError, URLError, ValueError, http.client.HTTPException) as exc:
             raise AuthorizationDenied(
                 "CREDENTIAL_STATUS_UNAVAILABLE",
                 "Broker lifecycle status could not be obtained",
