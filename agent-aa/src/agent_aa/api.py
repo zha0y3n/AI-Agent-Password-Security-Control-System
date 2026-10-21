@@ -11,7 +11,13 @@ from pydantic import BaseModel, ValidationError
 
 from .authority import AuthorizationAuthority, CapabilityVerifier
 from .canonical import strict_json_loads
-from .errors import AuthorizationDenied, ProtocolError, VerificationError
+from .errors import (
+    AuthorizationDenied,
+    CanonicalizationError,
+    ProtocolError,
+    RequestTooLarge,
+    VerificationError,
+)
 from .keys import KeyRegistry
 from .models import (
     IssueCapabilityInput,
@@ -24,14 +30,29 @@ from .models import (
 from .receipt import ReceiptVerifier
 
 ModelT = TypeVar("ModelT", bound=BaseModel)
+MAX_REQUEST_BYTES = 1 << 20
+
+
+async def _read_limited_body(request: Request) -> bytes:
+    body = bytearray()
+    async for chunk in request.stream():
+        body.extend(chunk)
+        if len(body) > MAX_REQUEST_BYTES:
+            raise RequestTooLarge()
+    return bytes(body)
 
 
 async def _strict_body(request: Request, model: type[ModelT]) -> ModelT:
-    data = strict_json_loads(await request.body())
-    return model.model_validate(data)
+    try:
+        data = strict_json_loads(await _read_limited_body(request))
+        return model.model_validate(data)
+    except RecursionError as exc:
+        raise CanonicalizationError("JSON nesting is too deep") from exc
 
 
 def _error_status(error: ProtocolError) -> int:
+    if isinstance(error, RequestTooLarge):
+        return 413
     if isinstance(error, AuthorizationDenied):
         return 403
     if isinstance(error, VerificationError):

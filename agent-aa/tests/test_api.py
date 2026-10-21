@@ -4,7 +4,7 @@ import json
 
 from fastapi.testclient import TestClient
 
-from agent_aa.api import create_app
+from agent_aa.api import MAX_REQUEST_BYTES, create_app
 from agent_aa.models import ExecutionReceipt
 from agent_aa.receipt import sign_receipt
 
@@ -38,6 +38,31 @@ def test_api_rejects_duplicate_json_field(protocol_env) -> None:
     client = TestClient(create_app(env["authority"], env["registry"]))
     request_json = json.dumps(env["request"].model_dump(mode="json"), separators=(",", ":"))
     raw = '{"request":' + request_json + ',"ttl_seconds":60,"ttl_seconds":30}'
+    response = client.post(
+        "/v1/capabilities/issue",
+        content=raw,
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "CANONICALIZATION_ERROR"
+
+
+def test_api_rejects_oversized_body(protocol_env) -> None:
+    env = protocol_env
+    client = TestClient(create_app(env["authority"], env["registry"]))
+    response = client.post(
+        "/v1/capabilities/issue",
+        content=b"x" * (MAX_REQUEST_BYTES + 1),
+        headers={"content-type": "application/json"},
+    )
+    assert response.status_code == 413
+    assert response.json()["error"]["code"] == "REQUEST_TOO_LARGE"
+
+
+def test_api_rejects_deeply_nested_json(protocol_env) -> None:
+    env = protocol_env
+    client = TestClient(create_app(env["authority"], env["registry"]))
+    raw = ("[" * 5000 + "0" + "]" * 5000).encode()
     response = client.post(
         "/v1/capabilities/issue",
         content=raw,
