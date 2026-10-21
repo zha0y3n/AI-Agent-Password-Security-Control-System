@@ -19,16 +19,17 @@ Go 实现，国密原语来自 [`emmansun/gmsm`](https://github.com/emmansun/gms
 |---|---|---|
 | 一：基础设施 | 国密封装、SQLite、SM4-GCM Vault、Credential 生命周期与 Epoch、原子消费、幂等、Mock 上游、审计哈希链、Challenge、埋点、Docker | 完成 |
 | 二：接入 A 的协议 | `ZTCANON-JSON-v1`、Request Hash、SM2 域分离验签（三组共享向量）、可信公钥表、校验流水线、`POST /v1/execute`、Receipt 签发（A 的 `ReceiptVerifier` 验过）、错误码与 HTTP 状态 | 完成；`result_envelope` 结构待 A/C 联审 |
-| 三：A + B 联调 | 真实 HTTP 全链路：Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit；`e2e-demo.py` 的 7 类攻击样例全部按预期拒绝或幂等处理，旧 Epoch 另行手工验证 | 完成（B 侧）；Epoch 来源待 A 改 |
+| 三：A + B 联调 | 真实 HTTP 全链路：Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit；`e2e-demo.py` 的 7 类攻击样例全部按预期拒绝或幂等处理，旧 Epoch 另行手工验证 | 完成（B 侧）；A 已实现 `BROKER_LIVE`，待真实联调 |
 | 四：面向 C 的支撑 | 副作用计数、Capability 状态查询、审计导出 / 复核、Broker 公钥记录、Metrics、状态重置、种子数据与批量 Credential、docker compose | 完成；接口是否够用待 C 确认 |
 | 五：竞赛化 | 设计说明、威胁与防御对照、答辩材料（见上方“文档”） | 文档完成；之后只修 Bug，不改协议 |
 
-**B 约 90%。** 剩下的部分：
+**B 约 92%。** 剩下的部分：
 
-- 等 A/C 联审：`result_envelope`、Epoch 来源、错误码表、C 的接口需求。
+- 等 A/C 联审：`result_envelope`、统一错误码表、C 的接口需求。
+- A 的 `BROKER_LIVE` 已实现，待与真实 B 做 TLS/mTLS 生命周期联调。
 - 可选：崩溃后停在 `CONSUMING` 的 Capability 的恢复流程。
 
-最近一次验证是 2026-10-18，已包含 A 在 PR #5 中的修复：
+最近一次 B 代码验证是 2026-10-18，已包含 A 在 PR #5 中的修复；A 的 PR #6 只增加 A 端可选 Status 查询，不改变 B 代码：
 
 - `go vet`、`gofmt` 无问题，`go test -race ./...` 全部通过。
 - `make interop` 通过：A 的 `ReceiptVerifier` 接受了 Go 签发的回执，篡改后的副本被拒绝。
@@ -140,6 +141,33 @@ Agent ── POST /v1/execute  {request, capability, holder_proof}
 管理员接口要求 `Authorization: Bearer $BROKER_ADMIN_TOKEN`，Agent 不持有这个令牌。
 
 Mock 上游（`:9090`）：`GET|PUT /git/repos/{repo}/files/{path}`、`POST /db/{db}/query|update`（都要求 Credential），`GET /stats`、`POST /reset`。
+
+### A/B Credential Status 契约
+
+A 的 `BROKER_LIVE` 模式会在签发前读取：
+
+```text
+GET /v1/credentials/{credential_id}/status
+Accept: application/json
+```
+
+B 返回的 `Info` 字段与 `shared/schemas/credential-status.schema.json` 一致：
+
+```json
+{
+  "credential_id": "github-prod",
+  "provider": "github",
+  "status": "ACTIVE",
+  "credential_epoch": 17,
+  "created_at": 1791975000,
+  "updated_at": 1791975000
+}
+```
+
+- 该端点只返回非秘密生命周期元数据，不返回密文或明文；
+- A 的失败关闭错误码：`CREDENTIAL_STATUS_UNAVAILABLE`、`CREDENTIAL_STATUS_INVALID`、`CREDENTIAL_STATUS_MISMATCH`、`CREDENTIAL_INACTIVE`；
+- B 的执行期错误码：`CREDENTIAL_EPOCH_MISMATCH`、`CREDENTIAL_INACTIVE`；
+- A 的预检查不替代 B 在执行事务内的原子检查；轮换/撤销竞态仍由 B 的线性化点裁决。
 
 ### `POST /v1/execute`
 
@@ -306,7 +334,7 @@ docs/                 设计说明、威胁与防御对照、答辩材料
 
 ## 待联审与已知限制
 
-- **Credential Epoch 来源**：A 的可信任务库把 epoch 写死为 17，Broker 新建的 Credential 从 1 开始。目前 `seed.sh` 把 `github-prod` 轮换到 17 来对齐。根本解决需要 A 改为通过 `GET /v1/credentials/{id}/status` 获取实时 epoch。在此之前，轮换或撤销 `github-prod` 后，A 签发的 Capability 都会被拒（`CREDENTIAL_EPOCH_MISMATCH`），需要 `reset.sh` 恢复。
+- **Credential Epoch 来源**：A 默认 `STATIC_DEMO` 仍把 epoch 写死为 17；A 已实现可选的 `BROKER_LIVE`，通过 `GET /v1/credentials/{id}/status` 获取实时 epoch。真实 A+B 生命周期联调（轮换、撤销、Status 不可用/伪造、撤销竞态）尚未完成；`seed.sh` 仍把 `github-prod` 轮换到 17 以兼容默认演示。B 执行事务内的 `ACTIVE + epoch` 检查仍是最终线性化点。
 - **`result_envelope` 结构与 Receipt 返回方式**：Receipt 目前随 `/v1/execute` 响应一起返回，并在幂等重放时原样再返回。两者都是 B 的提案，A/C 联审后需写入 `shared/schemas/` 和 `docs/crypto-protocol.md` §6。在此之前不要改动 `shared/`。
 - **DENIED 回执**：只为已验签的 Capability 签发，每次拒绝都要做一次 SM2 签名。如果 C 的压测发现这部分开销明显，可以改为按需签发。
 - **外部 API 成功但状态未落盘**：上游已执行而 Broker 写库前崩溃时，Capability 会停在 `CONSUMING`，之后的提交一律返回 `REPLAY_IN_PROGRESS`。这是 fail closed，但目前还没有恢复流程。
