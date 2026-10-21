@@ -138,6 +138,92 @@ def test_http_status_endpoint_requires_explicit_development_opt_in() -> None:
     assert resolver.resolve(credential_id="github-prod", audience="broker-01").credential_epoch == 18
 
 
+def test_issue_api_binds_live_epoch(protocol_env) -> None:
+    env = protocol_env
+    authority = _authority(
+        env,
+        AuthorizationPolicy(
+            TrustedTaskStore([env["task"]]),
+            credential_status_resolver=_resolver(lambda _url, _timeout: (200, _status(epoch=18))),
+        ),
+    )
+    client = TestClient(create_app(authority, env["registry"]))
+
+    response = client.post(
+        "/v1/capabilities/issue",
+        json={"request": env["request"].model_dump(mode="json"), "ttl_seconds": 60},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["body"]["credential_epoch"] == 18
+
+
+def test_static_demo_keeps_trusted_epoch_without_broker_lookup(protocol_env) -> None:
+    env = protocol_env
+    authority = _authority(env, AuthorizationPolicy(TrustedTaskStore([env["task"]])))
+
+    capability = authority.issue_capability(env["request"], now=env["now"])
+
+    assert capability.body.credential_epoch == env["task"].allowed_actions[0].credential_epoch == 17
+
+
+def test_ttl_rejection_happens_before_broker_lookup(protocol_env) -> None:
+    env = protocol_env
+    calls = 0
+
+    def fetch(_url: str, _timeout: float) -> tuple[int, bytes]:
+        nonlocal calls
+        calls += 1
+        return 200, _status()
+
+    authority = _authority(
+        env,
+        AuthorizationPolicy(
+            TrustedTaskStore([env["task"]]),
+            credential_status_resolver=_resolver(fetch),
+        ),
+    )
+
+    with pytest.raises(AuthorizationDenied) as caught:
+        authority.issue_capability(env["request"], ttl_seconds=61, now=env["now"])
+    assert caught.value.code == "TTL_EXCEEDS_POLICY"
+    assert calls == 0
+
+
+def test_live_runtime_loads_with_all_active_audiences(tmp_path) -> None:
+    initialize_demo_runtime(tmp_path, now=2_000_000_000)
+    config_path = tmp_path / "config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["credential_status_mode"] = "BROKER_LIVE"
+    config["broker_status_endpoints"] = {"broker-01": "http://127.0.0.1:8080"}
+    config["allow_insecure_broker_status_urls"] = True
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    authority, _, _, loaded = load_runtime(tmp_path)
+
+    assert loaded.credential_status_mode == "BROKER_LIVE"
+    assert authority.policy.credential_status_resolver is not None
+
+
+def test_live_runtime_ignores_cancelled_task_audience(tmp_path) -> None:
+    initialize_demo_runtime(tmp_path, now=2_000_000_000)
+    tasks_path = tmp_path / "trusted-tasks.json"
+    tasks = json.loads(tasks_path.read_text(encoding="utf-8"))
+    tasks["tasks"][0]["status"] = "CANCELLED"
+    tasks_path.write_text(json.dumps(tasks), encoding="utf-8")
+
+    config_path = tmp_path / "config.json"
+    config = json.loads(config_path.read_text(encoding="utf-8"))
+    config["credential_status_mode"] = "BROKER_LIVE"
+    config["broker_status_endpoints"] = {}
+    config_path.write_text(json.dumps(config), encoding="utf-8")
+
+    authority, _, _, loaded = load_runtime(tmp_path)
+
+    assert loaded.credential_status_mode == "BROKER_LIVE"
+    assert authority.policy.credential_status_resolver is not None
+
+
 def test_issue_api_returns_explicit_error_when_broker_status_is_unavailable(protocol_env) -> None:
     env = protocol_env
     authority = _authority(
