@@ -51,10 +51,36 @@ B 可以在不泄露细节的前提下统一返回拒绝，但内部至少应完
 
 任一步失败都不得读取 Credential 明文或产生业务副作用。
 
+## Credential 生命周期状态查询（A 已实现；B 已实现端点，待真实联调）
+
+为避免 AA 使用固定的 `credential_epoch`，A 可在签发前调用 AA 配置中、由可信 `audience` 静态映射出的 Broker 接口：
+
+```text
+GET /v1/credentials/{credential_id}/status
+Accept: application/json
+```
+
+该查询发生在 AgentRequest 已完整匹配 AA 服务端 `AllowedAction` **之后**。Agent 不能指定 URL、audience 或 Credential ID，也不会得到 Broker 管理令牌。B 返回须严格匹配以下对象，不能包含未知字段：
+
+```json
+{
+  "credential_id": "github-prod",
+  "provider": "git",
+  "status": "ACTIVE",
+  "credential_epoch": 18,
+  "created_at": 2000000000,
+  "updated_at": 2000000010
+}
+```
+
+`credential_id` 必须与可信 Action 一致；仅 `status="ACTIVE"` 可签发；AA 将响应中的 `credential_epoch` 直接写入现有、已签名的 CapabilityBody。超时、非 200、重定向、超过 16 KiB、非严格 JSON、未知/缺失字段、非法时间戳、ID 不一致和非 ACTIVE 状态均失败关闭。默认仅允许 HTTPS；本机 Docker/loopback 可显式开启 HTTP，但不能用于生产。
+
+这只缩短状态陈旧窗口，**不替代** B 在执行事务内对 `ACTIVE + epoch` 的原子复核。B 已实现该端点，响应字段与本契约一致；仍需确认实际联调中的 TLS/mTLS 或等效工作负载身份、缓存上限和故障码。A 当前发行错误码为 `CREDENTIAL_STATUS_UNAVAILABLE`、`CREDENTIAL_STATUS_INVALID`、`CREDENTIAL_STATUS_MISMATCH`、`CREDENTIAL_INACTIVE`，需与 B/C 纳入统一错误码表。
+
 ## 仍需 A/B 联审的接口
 
 - Broker Challenge API、存活时间、原子消费和错误码；
-- AA 如何安全取得当前 Credential epoch（首轮固定可信策略中为 17，Broker 仍须按实时值复核）；
+- Credential Status 查询的传输身份（推荐 mTLS/SPIFFE）、缓存上限、可用性目标和上述 lifecycle 错误码；
 - Issuer/Agent/Broker 公钥轮换与旧公钥验证窗口；
 - Clock skew 上限及可信时钟来源；
 - Capability CAS、故障恢复、幂等冲突和外部 API 成功但状态未落盘的语义；
