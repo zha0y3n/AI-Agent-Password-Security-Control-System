@@ -6,7 +6,7 @@
 
 | 模块 | 负责 | 完整度 | 当前状态 | 主要证据 |
 |---|---|---:|---|---|
-| A：Agent + AA（Python） | A | **95%** | 第 1～6 周期 A 范围完成；Capability/Holder Proof/Receipt 参考实现；新增可选 Broker 实时 Credential Epoch 绑定 | `pytest agent-aa/tests -q`：50 passed；`agent-aa demo`：`verified: true` |
+| A：Agent + AA（Python） | A | **95%** | 第 1～6 周期 A 范围完成；Capability/Holder Proof/Receipt 参考实现；新增可选 Broker 实时 Credential Epoch 绑定与 P0 硬化 | `pytest agent-aa/tests -q`：71 passed；`agent-aa demo`：`verified: true` |
 | B：Broker + Vault（Go） | B | **92%** | 阶段一～五完成；`/v1/execute`、Vault、原子消费、Receipt、审计链、Compose、E2E 已具备 | B 文档记录：`go test -race ./...`、`make interop`、Compose E2E 14/14 |
 | C：评测 + Dashboard | C | **88%** | 7 类实验脚本、7 份 CSV、7 Tab Dashboard、一键启动已提交 | 已提交 CSV 共 110 条记录，全部标记通过；待干净环境复现 |
 | 全链路 | A+B+C | **92%** | A+B 已通过真实 HTTP 跑通；A 的 `BROKER_LIVE` 已合入；C 的系统实验已落盘 | 三方等权自评；最终以干净环境复现和答辩材料为准 |
@@ -82,12 +82,13 @@ evaluation-dashboard（C）
 - Holder Proof 生成与参考验签；
 - Execution Receipt 结构与参考验签；
 - FastAPI、CLI、JSON Schema、跨语言测试向量；
-- 可选 `BROKER_LIVE`：在可信 Action 精确匹配后读取 Broker 当前 `ACTIVE` epoch，查询/响应/状态异常均拒绝签发。
+- 可选 `BROKER_LIVE`：在可信 Action 精确匹配后读取 Broker 当前 `ACTIVE` epoch，查询/响应/状态异常均拒绝签发；
+- P0 硬化：真实 HTTP Status 测试、AA 请求体 1 MiB 上限、深层 JSON 保护、统一错误码表、A+B 生命周期联调脚本。
 
 验证：
 
 ```bash
-.venv/bin/pytest agent-aa/tests -q     # 50 passed
+.venv/bin/pytest agent-aa/tests -q     # 71 passed
 .venv/bin/agent-aa demo                # verified: true
 ```
 
@@ -203,7 +204,8 @@ streamlit run evaluation-dashboard/dashboard/app.py
 
 | 范围 | 命令 | 结果 | 日期 |
 |---|---|---|---|
-| A 单元/协议 | `pytest agent-aa/tests -q` | 50 passed | 2026-10-22 |
+| A 单元/协议 | `pytest agent-aa/tests -q` | 71 passed | 2026-10-22 |
+| A+B 生命周期 | `scripts/e2e-lifecycle.py --reset` | 待 B 运行环境执行 | 2026-10-22 |
 | A 闭环 | `agent-aa demo` | `verified: true` | 2026-10-22 |
 | B Go | `go test -race ./...` | 通过 | 2026-10-18（B 文档） |
 | B 互操作 | `make interop` | 通过 | 2026-10-18（B 文档） |
@@ -239,6 +241,7 @@ scripts/                 安装、测试、启动与产物生成脚本
 - [docs/crypto-protocol.md](docs/crypto-protocol.md)：Canonical JSON、SM2/SM3 字节级协议
 - [docs/a-b-interface.md](docs/a-b-interface.md)：A→B 接口与 Credential Status 契约
 - [docs/audit-chain.md](docs/audit-chain.md)：审计哈希链与检查点格式
+- [docs/error-codes.md](docs/error-codes.md)：A/B/C 统一错误码表
 - [docs/a-progress.md](docs/a-progress.md)：A 进度与验证
 - [docs/b-progress.md](docs/b-progress.md)：B 进度与验证
 - [docs/c-progress.md](docs/c-progress.md)：C 实验进度与证据

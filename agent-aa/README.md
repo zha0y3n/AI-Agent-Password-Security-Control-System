@@ -2,7 +2,7 @@
 
 A 模块负责“把用户任务变成明确请求，并签发一张只能用于该任务、该 Agent、该 Broker、该 Credential 版本的一次性授权票据”。A 不实现 Broker/Vault，也不持有目标业务长期 Credential。
 
-当前完整度：**95%**（A 范围实现完成；与真实 B 的生命周期联调仍待进行）。
+当前完整度：**95%**（A 范围实现完成，P0 硬化已补；与真实 B 的生命周期联调仍待进行）。
 
 ## 组件
 
@@ -45,7 +45,7 @@ Holder Proof 绑定：Capability 哈希、实际请求哈希、Broker Audience�
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e './agent-aa[dev]'
-.venv/bin/pytest agent-aa/tests -q     # 50 passed
+.venv/bin/pytest agent-aa/tests -q     # 71 passed
 .venv/bin/agent-aa demo                # verified: true
 ```
 
@@ -132,15 +132,21 @@ Accept: application/json
 
 ## 测试覆盖
 
-`50 passed` 覆盖：
+`71 passed` 覆盖：
 
 - Canonical JSON、SM3 已知答案、SM2 正常/篡改、非法 DER；
 - 正常签发、错误资源/Body/Task、TTL、过期、跨任务/服务/资源/操作/路径；
 - RequestHash、Audience、Wrong Holder、Challenge、Proof 过期；
 - Receipt 篡改/验签 API；
 - `BROKER_LIVE` 实时 epoch 绑定、撤销状态拒绝、HTTP/响应/身份错误失败关闭；
-- 先授权后查询、HTTP 开发环境显式 opt-in、Live 模式缺少 audience 端点时拒绝启动；
+- 真实本地 HTTP Status：重定向、超过 16 KiB、超时、坏状态行、截断响应、非 200、ID 不一致、非 ACTIVE；
+- `BROKER_LIVE` 经 `/v1/capabilities/issue` 的成功路径、`STATIC_DEMO` 不查询 Broker、TTL 拒绝先于查询；
+- `BROKER_LIVE` 启动校验：活跃 audience 必须配置端点，已取消任务不阻塞启动；
+- AA 请求体 1 MiB 上限、深层嵌套 JSON 返回 400 而非 500；
+- 先授权后查询、HTTP 开发环境显式 opt-in；
 - Capability/Holder Proof/Receipt 三类共享向量。
+
+真实 B 联调使用 [`scripts/e2e-lifecycle.py`](../scripts/e2e-lifecycle.py)，覆盖 ACTIVE 签发、轮换后旧 Capability 拒绝、撤销后拒绝签发、Status 不可用失败关闭。
 
 ## 限制
 
@@ -154,5 +160,6 @@ Accept: application/json
 
 - [../docs/a-b-interface.md](../docs/a-b-interface.md)：A→B 接口
 - [../docs/crypto-protocol.md](../docs/crypto-protocol.md)：字节级密码协议
+- [../docs/error-codes.md](../docs/error-codes.md)：A/B/C 统一错误码表
 - [../docs/a-progress.md](../docs/a-progress.md)：A 进度
 - [../shared/README.md](../shared/README.md)：共享 Schema 与向量

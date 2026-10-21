@@ -33,7 +33,7 @@
 }
 ```
 
-AA 不接受客户端提交的 `TaskContext` 作为授权依据。它仅用 `task_id` 查服务端可信任务库并进行完整精确匹配。
+AA 不接受客户端提交的 `TaskContext` 作为授权依据。它仅用 `task_id` 查服务端可信任务库并进行完整精确匹配。AA 对签发请求体限制为 1 MiB，超限返回 413 `REQUEST_TOO_LARGE`；JSON 嵌套过深按 `CANONICALIZATION_ERROR` 返回 400，不能返回 500。
 
 ## B 的强制校验顺序
 
