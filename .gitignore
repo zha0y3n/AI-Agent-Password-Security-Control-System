@@ -41,3 +41,6 @@ concurrency.csv
 performance.csv
 revocation.csv
 prompt_injection.csv
+
+# Reproduction records are evidence and must be committed
+!evaluation-dashboard/results/reproductions/**/*.csv
