@@ -57,6 +57,16 @@ func run() error {
 	if created {
 		log.Warn("generated new broker SM2 signing key", "path", cfg.SigningKeyFile)
 	}
+	cpSigner, created, err := crypto.LoadOrCreateSM2Signer(cfg.CheckpointKeyFile)
+	if err != nil {
+		return err
+	}
+	if created {
+		log.Warn("generated new audit checkpoint SM2 key", "path", cfg.CheckpointKeyFile)
+	}
+	if cpSigner.PublicKeyHex() == signer.PublicKeyHex() {
+		return errors.New("audit checkpoint key must differ from the receipt signing key")
+	}
 	v, err := vault.New(cfg.VaultKey)
 	if err != nil {
 		return err
@@ -65,23 +75,24 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	auditor := evidence.NewAuditor(db, signer, cfg.CheckpointEvery)
+	auditor := evidence.NewAuditor(db, cpSigner, cfg.CheckpointEvery)
 	challenges := challenge.NewService(db, cfg.ChallengeTTL, cfg.BrokerID)
 	credentials := credential.NewService(db, v, auditor)
 	m := metrics.New()
 
 	srv := &api.Server{
-		BrokerID:     cfg.BrokerID,
-		AdminToken:   cfg.AdminToken,
-		Credentials:  credentials,
-		Challenges:   challenges,
-		Auditor:      auditor,
-		Signer:       signer,
-		Metrics:      m,
-		Log:          log,
-		KeyID:        cfg.KeyID,
-		KeyNotBefore: notBefore,
-		KeyNotAfter:  notBefore + int64(cfg.KeyValidity/time.Second),
+		BrokerID:         cfg.BrokerID,
+		AdminToken:       cfg.AdminToken,
+		Credentials:      credentials,
+		Challenges:       challenges,
+		Auditor:          auditor,
+		Signer:           signer,
+		CheckpointSigner: cpSigner,
+		Metrics:          m,
+		Log:              log,
+		KeyID:            cfg.KeyID,
+		KeyNotBefore:     notBefore,
+		KeyNotAfter:      notBefore + int64(cfg.KeyValidity/time.Second),
 	}
 	if cfg.KeyRegistryPath != "" {
 		keys, err := protocol.LoadKeyRegistry(cfg.KeyRegistryPath)

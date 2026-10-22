@@ -166,6 +166,7 @@ func (c Config) executionPlan(_ context.Context, in *Input) *Denial {
 			RequestHash:     in.RequestHash,
 			CredentialID:    capb.CredentialID,
 			CredentialEpoch: capb.CredentialEpoch,
+			Nonce:           capb.Nonce,
 		},
 		Call: call,
 	}

@@ -64,6 +64,33 @@ func TestConsumeLifecycleAndIdempotency(t *testing.T) {
 	}
 }
 
+func TestNonceIsSingleUse(t *testing.T) {
+	_, store := setup(t)
+	a := claim("cap-a")
+	a.Nonce = "0123456789abcdef0123456789abcdef"
+	if res, err := store.Consume(ctx, a); err != nil || res.Outcome != capability.Won {
+		t.Fatalf("first consume: %+v %v", res, err)
+	}
+	// 另一个 cap_id 复用同一 nonce：拒绝，且不留下记录
+	b := claim("cap-b")
+	b.Nonce = a.Nonce
+	if _, err := store.Consume(ctx, b); !errors.Is(err, capability.ErrNonceReused) {
+		t.Fatalf("nonce reuse: %v", err)
+	}
+	if _, err := store.Get(ctx, "cap-b"); err == nil {
+		t.Fatal("rejected capability left a record")
+	}
+	// 同一 cap_id 换 nonce：claim 不一致
+	a2 := a
+	a2.Nonce = "fedcba9876543210fedcba9876543210"
+	if _, err := store.Consume(ctx, a2); !errors.Is(err, capability.ErrClaimMismatch) {
+		t.Fatalf("same cap, different nonce: %v", err)
+	}
+	if info, err := store.Get(ctx, "cap-a"); err != nil || info.Nonce != a.Nonce {
+		t.Fatalf("info: %+v %v", info, err)
+	}
+}
+
 func TestFailedCapabilityCannotBeReused(t *testing.T) {
 	_, store := setup(t)
 	if _, err := store.Consume(ctx, claim("cap-f")); err != nil {

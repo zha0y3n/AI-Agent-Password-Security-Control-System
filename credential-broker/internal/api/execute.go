@@ -99,7 +99,7 @@ func (s *Server) auditVerify(w http.ResponseWriter, r *http.Request) {
 	if n := len(records); n > 0 {
 		res["head_hash"] = records[n-1].Hash
 	}
-	if err := evidence.VerifyChain(records, cps, s.Signer.PublicKey()); err != nil {
+	if err := evidence.VerifyChain(records, cps, s.CheckpointSigner.PublicKey()); err != nil {
 		res["valid"], res["error"] = false, err.Error()
 	}
 	writeJSON(w, http.StatusOK, res)

@@ -131,8 +131,8 @@ stateDiagram-v2
 
 实现见 `internal/capability/consume.go`。整个 `Consume` 在一个 `BEGIN IMMEDIATE` 事务中完成：
 
-1. `INSERT OR IGNORE` 登记 cap_id 及其 request_hash、credential_id、credential_epoch。
-2. 读回记录：claim 不一致返回 `CAPABILITY_CLAIM_MISMATCH`，request_hash 不一致返回 `IDEMPOTENCY_CONFLICT`。
+1. `INSERT OR IGNORE` 登记 cap_id 及其 request_hash、credential_id、credential_epoch、nonce。nonce 有唯一索引（`docs/a-b-interface.md` 第 7 步要求检查 Capability nonce）。
+2. 读回记录：读不到说明 nonce 已属于另一张 Capability，返回 `CAPABILITY_NONCE_REUSED`；claim（含 nonce）不一致返回 `CAPABILITY_CLAIM_MISMATCH`；request_hash 不一致返回 `IDEMPOTENCY_CONFLICT`。
 3. 按当前状态分支：已 `CONSUMED` 则返回保存的结果（幂等重放）；`CONSUMING` 返回 `REPLAY_IN_PROGRESS`；`FAILED` 返回 `CAPABILITY_ALREADY_FAILED`。
 4. **线性化点**：`credential.CheckUsable`（Credential 为 ACTIVE 且 epoch 相等）与 `UPDATE … SET state='CONSUMING' WHERE state='ISSUED'` 在同一事务内执行，以受影响行数判定胜负，同时写入审计条目 `capability.consume`。
 
@@ -222,7 +222,7 @@ Challenge 用来防止“同一份 Holder Proof 再提交一次”。Capability 
 ## 9. 审计链
 
 - 每个状态变更都在**同一事务**内追加审计条目，与业务状态原子提交，不会出现“状态变了但没留痕”：Credential 生命周期、`capability.consume`、`capability.complete`、`capability.fail`。拒绝事件（`execute.deny`）单独开事务记录。
-- `H_i = SM3(H_{i-1} ‖ L_i)`。每隔 `BROKER_CHECKPOINT_EVERY` 条（默认 100）用 Broker 私钥对 `(seq, head_hash, created_at)` 签一个检查点。
+- `H_i = SM3(H_{i-1} ‖ L_i)`。每隔 `BROKER_CHECKPOINT_EVERY` 条（默认 100）用**专用的检查点私钥**对 `(seq, head_hash, created_at)` 签一个检查点。A 的公钥模型里 `RECEIPT_SIGNING` 只签回执，所以检查点不复用回执密钥，公钥单独发布在 `/v1/broker/public-key` 的 `checkpoint_key`。
 - 修改、删除、重排条目，或回滚到检查点之前，都能被 `VerifyChain` 和 `GET /v1/audit/verify` 检测出来（`TestChainTamperDetection`）。
 - 审计内容不包含 Credential 明文或密文。
 
@@ -233,7 +233,8 @@ Challenge 用来防止“同一份 Holder Proof 再提交一次”。Capability 
 | 材料 | 来源 | 谁能看到 |
 |---|---|---|
 | Vault 主密钥 `K_V` | `BROKER_VAULT_KEY`（由 `gen-env.sh` 生成到已 gitignore 的 `.env`） | 仅 Broker 进程 |
-| Broker SM2 私钥 | `BROKER_SIGNING_KEY_FILE`，不存在时生成，权限 0600 | 仅 Broker 进程 |
+| Receipt 签名私钥 | `BROKER_SIGNING_KEY_FILE`，不存在时生成，权限 0600；公钥以 `RECEIPT_SIGNING` 发布 | 仅 Broker 进程 |
+| 审计检查点私钥 | `BROKER_CHECKPOINT_KEY_FILE`，必须与上一项不同（启动时检查） | 仅 Broker 进程 |
 | 管理员令牌 | `BROKER_ADMIN_TOKEN`（至少 16 字符，常量时间比较） | 运维 / 实验脚本，**Agent 不持有** |
 | AA 与 Agent 公钥表 | `BROKER_KEY_REGISTRY`，直接读取 A 的 `public-keys.json` | 只读 |
 | 可信 AA | `BROKER_TRUSTED_ISSUER` | 配置项，不取自请求 |

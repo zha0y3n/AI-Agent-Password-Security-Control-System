@@ -457,6 +457,24 @@ func TestReplaySameCapabilityNewChallenge(t *testing.T) {
 	}
 }
 
+// 两张不同的 Capability 复用同一 nonce（AA 不会这样签发）：第二张在原子消费处拒绝，不读取 Credential。
+func TestCapabilityNonceReuseDenied(t *testing.T) {
+	f := newFixture(t)
+	req, cap, proof := f.valid()
+	if d := f.run(bundle(t, req, cap, proof)).Decision; !d.Allowed {
+		t.Fatalf("first: %+v", d)
+	}
+	cap2 := f.capability(req, func(b *protocol.CapabilityBody) { b.Nonce = cap.Body.Nonce })
+	out := f.run(bundle(t, req, cap2, f.proof(cap2, req, f.challenge(), nil)))
+	d := out.Decision
+	if d.Allowed || d.FailedStep != "atomic_consume" || d.Code != errcode.CapabilityNonceReused {
+		t.Fatalf("got %+v", d)
+	}
+	if out.CredentialLoaded || f.client.Calls() != 1 {
+		t.Fatalf("nonce reuse touched credential=%v upstream calls=%d", out.CredentialLoaded, f.client.Calls())
+	}
+}
+
 // 并发重放同一写 Capability（每个请求各自持有合法 Challenge）：实际副作用恰好一次。
 func TestConcurrentReplayWriteSideEffectOnce(t *testing.T) {
 	f := newFixture(t)

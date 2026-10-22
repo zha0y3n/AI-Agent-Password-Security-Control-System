@@ -60,7 +60,18 @@ func (db *DB) Migrate(ctx context.Context) error {
 		return fmt.Errorf("migrate: %w", err)
 	}
 	// 旧库补列：默认值为空串，旧 Challenge 因 audience 不匹配而无法消费（fail closed）。
-	return db.ensureColumn(ctx, "challenges", "audience", "TEXT NOT NULL DEFAULT ''")
+	if err := db.ensureColumn(ctx, "challenges", "audience", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	// Capability nonce 全局唯一（空串为旧记录 / 内部测试，不参与约束）。
+	if err := db.ensureColumn(ctx, "capabilities", "nonce", "TEXT NOT NULL DEFAULT ''"); err != nil {
+		return err
+	}
+	if _, err := db.ExecContext(ctx,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_capabilities_nonce ON capabilities(nonce) WHERE nonce <> ''`); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	return nil
 }
 
 // ensureColumn 在列不存在时追加列。table / column / ddl 均为代码内常量。

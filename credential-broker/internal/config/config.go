@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"time"
 
@@ -13,17 +14,20 @@ import (
 
 // Config 是 Broker 配置。
 type Config struct {
-	BrokerID        string
-	Addr            string
-	DBPath          string
-	SigningKeyFile  string
-	VaultKey        []byte // K_V，16 字节
-	AdminToken      string
-	ChallengeTTL    time.Duration
-	CheckpointEvery int
-	UpstreamURL     string
-	UpstreamTimeout time.Duration
-	LogLevel        string
+	BrokerID       string
+	Addr           string
+	DBPath         string
+	SigningKeyFile string // Receipt 签名私钥（对外公布为 RECEIPT_SIGNING）
+	// CheckpointKeyFile 是审计检查点的签名私钥。A 的公钥模型中 RECEIPT_SIGNING 只用于回执，
+	// 检查点因此使用独立密钥，两者不得是同一文件。
+	CheckpointKeyFile string
+	VaultKey          []byte // K_V，16 字节
+	AdminToken        string
+	ChallengeTTL      time.Duration
+	CheckpointEvery   int
+	UpstreamURL       string
+	UpstreamTimeout   time.Duration
+	LogLevel          string
 
 	// Receipt 签名密钥的标识与有效期（对外公布为 A 格式的 PublicKeyRecord）。
 	KeyID       string
@@ -42,14 +46,15 @@ type Config struct {
 // Load 读取并校验配置。
 func Load() (*Config, error) {
 	c := &Config{
-		BrokerID:       env("BROKER_ID", "broker-01"),
-		Addr:           env("BROKER_ADDR", ":8080"),
-		DBPath:         env("BROKER_DB_PATH", "data/broker.db"),
-		SigningKeyFile: env("BROKER_SIGNING_KEY_FILE", "data/broker-sm2.key"),
-		AdminToken:     os.Getenv("BROKER_ADMIN_TOKEN"),
-		UpstreamURL:    env("BROKER_UPSTREAM_URL", "http://127.0.0.1:9090"),
-		LogLevel:       env("BROKER_LOG_LEVEL", "info"),
-		KeyID:          env("BROKER_KEY_ID", "broker-key-01"),
+		BrokerID:          env("BROKER_ID", "broker-01"),
+		Addr:              env("BROKER_ADDR", ":8080"),
+		DBPath:            env("BROKER_DB_PATH", "data/broker.db"),
+		SigningKeyFile:    env("BROKER_SIGNING_KEY_FILE", "data/broker-sm2.key"),
+		CheckpointKeyFile: env("BROKER_CHECKPOINT_KEY_FILE", "data/broker-checkpoint-sm2.key"),
+		AdminToken:        os.Getenv("BROKER_ADMIN_TOKEN"),
+		UpstreamURL:       env("BROKER_UPSTREAM_URL", "http://127.0.0.1:9090"),
+		LogLevel:          env("BROKER_LOG_LEVEL", "info"),
+		KeyID:             env("BROKER_KEY_ID", "broker-key-01"),
 
 		TrustedIssuer:   os.Getenv("BROKER_TRUSTED_ISSUER"),
 		KeyRegistryPath: os.Getenv("BROKER_KEY_REGISTRY"),
@@ -75,6 +80,9 @@ func Load() (*Config, error) {
 	}
 	if c.ClockSkew, err = duration("BROKER_CLOCK_SKEW", 5*time.Second); err != nil {
 		return nil, err
+	}
+	if filepath.Clean(c.CheckpointKeyFile) == filepath.Clean(c.SigningKeyFile) {
+		return nil, fmt.Errorf("BROKER_CHECKPOINT_KEY_FILE must differ from BROKER_SIGNING_KEY_FILE")
 	}
 	if (c.TrustedIssuer == "") != (c.KeyRegistryPath == "") {
 		return nil, fmt.Errorf("BROKER_TRUSTED_ISSUER and BROKER_KEY_REGISTRY must be set together")

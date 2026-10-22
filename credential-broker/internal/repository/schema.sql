@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS capabilities (
     request_hash      TEXT    NOT NULL,
     credential_id     TEXT    NOT NULL,
     credential_epoch  INTEGER NOT NULL,
+    nonce             TEXT    NOT NULL DEFAULT '',
     result            BLOB,
     error_code        TEXT,
     created_at        INTEGER NOT NULL,

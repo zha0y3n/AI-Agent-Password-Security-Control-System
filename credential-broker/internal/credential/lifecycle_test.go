@@ -137,7 +137,7 @@ func TestLifecycleIsAudited(t *testing.T) {
 		}
 	}
 	cps, _ := env.Auditor.Checkpoints(ctx)
-	if err := evidence.VerifyChain(rs, cps, env.Signer.PublicKey()); err != nil {
+	if err := evidence.VerifyChain(rs, cps, env.CheckpointSigner.PublicKey()); err != nil {
 		t.Fatal(err)
 	}
 }

@@ -162,7 +162,7 @@ func TestDecisionsAreAudited(t *testing.T) {
 		t.Fatalf("audit types: %v", types)
 	}
 	cps, _ := h.env.Auditor.Checkpoints(ctx)
-	if err := evidence.VerifyChain(rs, cps, h.env.Signer.PublicKey()); err != nil {
+	if err := evidence.VerifyChain(rs, cps, h.env.CheckpointSigner.PublicKey()); err != nil {
 		t.Fatal(err)
 	}
 }

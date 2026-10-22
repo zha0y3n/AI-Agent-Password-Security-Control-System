@@ -29,6 +29,7 @@ const (
 	IdempotencyConflict     = "IDEMPOTENCY_CONFLICT"
 	CapabilityClaimMismatch = "CAPABILITY_CLAIM_MISMATCH"
 	CapabilityFailed        = "CAPABILITY_ALREADY_FAILED"
+	CapabilityNonceReused   = "CAPABILITY_NONCE_REUSED" // nonce 已属于另一个 Capability
 
 	// 上游
 	UpstreamError        = "UPSTREAM_ERROR"        // 上游不可达或 5xx，Capability -> FAILED
@@ -53,7 +54,7 @@ func ExecuteStatus(code string) int {
 	switch code {
 	case "CANONICALIZATION_ERROR", "SCHEMA_VALIDATION_FAILED":
 		return 400
-	case ReplayInProgress, IdempotencyConflict, CapabilityClaimMismatch:
+	case ReplayInProgress, IdempotencyConflict, CapabilityClaimMismatch, CapabilityNonceReused:
 		return 409
 	case UpstreamError:
 		return 502

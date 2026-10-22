@@ -12,7 +12,8 @@ COPY --from=build /out/ /app/
 # 预建属主为 nonroot 的数据目录，挂载命名卷时继承该属主。
 COPY --from=build --chown=nonroot:nonroot /data /app/data
 ENV BROKER_DB_PATH=/app/data/broker.db \
-    BROKER_SIGNING_KEY_FILE=/app/data/broker-sm2.key
+    BROKER_SIGNING_KEY_FILE=/app/data/broker-sm2.key \
+    BROKER_CHECKPOINT_KEY_FILE=/app/data/broker-checkpoint-sm2.key
 USER nonroot:nonroot
 EXPOSE 8080 9090
 ENTRYPOINT ["/app/broker"]

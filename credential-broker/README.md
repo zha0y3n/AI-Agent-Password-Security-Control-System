@@ -121,7 +121,7 @@ Agent ── POST /v1/execute  {request, capability, holder_proof}
 | 方法 | 路径 | 权限 | 说明 |
 |---|---|---|---|
 | GET | `/health` | 公开 | 健康检查 |
-| GET | `/v1/broker/public-key` | 公开 | Broker SM2 公钥：`public_key`（04‖X‖Y hex，审计检查点用）、`public_key_pem`、`key_record` |
+| GET | `/v1/broker/public-key` | 公开 | Receipt 签名公钥（`public_key` 为 04‖X‖Y hex、`public_key_pem`、`key_record`），以及审计检查点公钥 `checkpoint_key` |
 | GET | `/v1/broker/key-registry` | 公开 | A 的 `KeyRegistryDocument` 格式，可直接交给 `agent_aa.keys.KeyRegistry` 验 Receipt |
 | POST | `/v1/challenge` | 公开 | `{"agent_id"}` → `{challenge, agent_id, audience, expires_at}` |
 | POST | `/v1/execute` | 公开 | 请求体为 Execution Bundle，见下文 |
@@ -203,7 +203,7 @@ B 返回的 `Info` 字段与 `shared/schemas/credential-status.schema.json` 一�
 | 403 | 时间 / 绑定类：`CAPABILITY_NOT_YET_VALID`、`CAPABILITY_EXPIRED`、`AUDIENCE_MISMATCH`、`REQUEST_BINDING_MISMATCH`、`REQUEST_HASH_MISMATCH`、`HOLDER_BINDING_MISMATCH`、`PROOF_NOT_YET_VALID`、`PROOF_EXPIRED`、`UNSUPPORTED_OPERATION` |
 | 403 | Challenge：`CHALLENGE_UNKNOWN`、`CHALLENGE_USED`、`CHALLENGE_EXPIRED`、`CHALLENGE_WRONG_AGENT`、`CHALLENGE_WRONG_AUDIENCE` |
 | 403 | 生命周期：`CREDENTIAL_NOT_FOUND`、`CREDENTIAL_INACTIVE`、`CREDENTIAL_EPOCH_MISMATCH`、`CREDENTIAL_UNAVAILABLE`、`CAPABILITY_ALREADY_FAILED` |
-| 409 | `REPLAY_IN_PROGRESS`、`IDEMPOTENCY_CONFLICT`、`CAPABILITY_CLAIM_MISMATCH` |
+| 409 | `REPLAY_IN_PROGRESS`、`IDEMPOTENCY_CONFLICT`、`CAPABILITY_CLAIM_MISMATCH`、`CAPABILITY_NONCE_REUSED` |
 | 502 | `UPSTREAM_ERROR`（赢得执行权后上游不可达或返回 5xx；Capability → `FAILED`） |
 | 500 | `INTERNAL_ERROR`（如 Challenge 存储不可用，同样拒绝） |
 | 503 | `EXECUTION_DISABLED`（未配置 `BROKER_TRUSTED_ISSUER` / `BROKER_KEY_REGISTRY`） |
@@ -273,7 +273,8 @@ sh scripts/reset.sh                   # 清空 Broker（Credential、Capability�
 | `BROKER_ID` | `broker-01` | 本 Broker 的 audience，也是 Receipt 的 `broker_id` |
 | `BROKER_ADDR` | `:8080` | 监听地址 |
 | `BROKER_DB_PATH` | `data/broker.db` | SQLite（WAL，`BEGIN IMMEDIATE`） |
-| `BROKER_SIGNING_KEY_FILE` | `data/broker-sm2.key` | Broker SM2 私钥，不存在时生成（0600） |
+| `BROKER_SIGNING_KEY_FILE` | `data/broker-sm2.key` | Receipt 签名私钥（对外为 `RECEIPT_SIGNING`），不存在时生成（0600） |
+| `BROKER_CHECKPOINT_KEY_FILE` | `data/broker-checkpoint-sm2.key` | 审计检查点私钥，必须与 Receipt 私钥不同，不存在时生成（0600） |
 | `BROKER_VAULT_KEY` | **必填** | SM4 主密钥，32 个十六进制字符：`openssl rand -hex 16` |
 | `BROKER_ADMIN_TOKEN` | **必填** | ≥16 字符：`openssl rand -hex 24` |
 | `BROKER_KEY_ID` | `broker-key-01` | Receipt 签名公钥标识 |
@@ -335,6 +336,8 @@ docs/                 设计说明、威胁与防御对照、答辩材料
 ## 待联审与已知限制
 
 - **Credential Epoch 来源**：A 默认 `STATIC_DEMO` 仍把 epoch 写死为 17；A 已实现可选的 `BROKER_LIVE`，通过 `GET /v1/credentials/{id}/status` 获取实时 epoch。真实 A+B 生命周期联调（轮换、撤销、Status 不可用/伪造、撤销竞态）尚未完成；`seed.sh` 仍把 `github-prod` 轮换到 17 以兼容默认演示。B 执行事务内的 `ACTIVE + epoch` 检查仍是最终线性化点。
+- **错误码与 HTTP 状态码**：A 已提交统一错误码表 [`docs/error-codes.md`](../docs/error-codes.md)，但 HTTP 状态仍有分歧（A 的 Challenge 类拒绝只有 `CHALLENGE_MISMATCH`，验签失败返回 401；Broker 细分为 5 个 Challenge 码，并统一返回 403）。C 的实验脚本依赖 Broker 现有的码，因此暂不改动，等 A/B/C 联审。
+- **从旧版本升级**：检查点改用独立密钥后，旧数据库中由 Receipt 密钥签的检查点无法通过 `/v1/audit/verify`。开发 / 实验环境请执行一次 `reset`。
 - **`result_envelope` 结构与 Receipt 返回方式**：Receipt 目前随 `/v1/execute` 响应一起返回，并在幂等重放时原样再返回。两者都是 B 的提案，A/C 联审后需写入 `shared/schemas/` 和 `docs/crypto-protocol.md` §6。在此之前不要改动 `shared/`。
 - **DENIED 回执**：只为已验签的 Capability 签发，每次拒绝都要做一次 SM2 签名。如果 C 的压测发现这部分开销明显，可以改为按需签发。
 - **外部 API 成功但状态未落盘**：上游已执行而 Broker 写库前崩溃时，Capability 会停在 `CONSUMING`，之后的提交一律返回 `REPLAY_IN_PROGRESS`。这是 fail closed，但目前还没有恢复流程。

@@ -210,6 +210,7 @@ func consumeErrCode(err error) (string, bool) {
 		capability.ErrInProgress:      errcode.ReplayInProgress,
 		capability.ErrRequestMismatch: errcode.IdempotencyConflict,
 		capability.ErrClaimMismatch:   errcode.CapabilityClaimMismatch,
+		capability.ErrNonceReused:     errcode.CapabilityNonceReused,
 		capability.ErrAlreadyFailed:   errcode.CapabilityFailed,
 		credential.ErrNotFound:        errcode.CredentialNotFound,
 		credential.ErrInactive:        errcode.CredentialInactive,

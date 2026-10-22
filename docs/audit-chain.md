@@ -8,7 +8,7 @@
 |---|---|
 | `GET /v1/audit?from=1&limit=1000` | 审计条目，`limit` 最大 1000，分页取完 |
 | `GET /v1/audit/checkpoints` | 全部签名检查点 |
-| `GET /v1/broker/public-key` | Broker SM2 公钥：`public_key` 为未压缩 `04‖X‖Y` 十六进制，`public_key_pem` 为 PEM SPKI |
+| `GET /v1/broker/public-key` | Broker 的两把 SM2 公钥。**检查点用 `checkpoint_key.public_key`**（未压缩 `04‖X‖Y` 十六进制，另有 `checkpoint_key.public_key_pem`）；顶层的 `public_key` / `public_key_pem` 是 Receipt 签名公钥，不签检查点 |
 | `GET /v1/broker/key-registry` | 同一公钥，以 A 的 `KeyRegistryDocument` 格式发布（用途 `RECEIPT_SIGNING`） |
 | `GET /v1/audit/verify` | Broker 用自己的参考实现复核整条链与全部检查点，返回 `valid`、`entries`、`checkpoints`、`head_hash` |
 | `POST /v1/audit/checkpoints` | 管理员强制为当前链头生成检查点 |
@@ -44,12 +44,15 @@ msg = "ACG-AUDIT-CHECKPOINT-v1"      (ASCII, 23 字节)
     ‖ head_hash                       (32 字节，= H_seq)
     ‖ uint64_be(created_at)
 
-signature = SM2-Sign(sk_B, msg)       -- 含 Z 值预处理，UID = "1234567812345678"，ASN.1 DER 编码
+signature = SM2-Sign(sk_CP, msg)      -- 含 Z 值预处理，UID = "1234567812345678"，ASN.1 DER 编码
+
+sk_CP 是专用的检查点私钥（BROKER_CHECKPOINT_KEY_FILE），与 Receipt 签名私钥分开：
+A 的公钥模型中 RECEIPT_SIGNING 只用于回执。
 ```
 
 校验规则：
 
-1. 签名用 Broker 公钥验证通过
+1. 签名用 `checkpoint_key.public_key` 验证通过
 2. `seq` 不超过当前条目数（否则说明日志被**回滚或截断**）
 3. `head_hash == H_seq`
 

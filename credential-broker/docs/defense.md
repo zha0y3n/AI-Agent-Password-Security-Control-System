@@ -90,7 +90,7 @@ Credential 检查必须和 CAS 在同一事务内，所以不放在流水线里�
 `issued_at` 允许 5 秒偏差（与 A 的参考实现一致，可通过 `BROKER_CLOCK_SKEW` 配置）。`expires_at` 不放宽。Demo 中 Capability 的有效期是 60 秒（A 的默认值），Challenge 也是 60 秒，偏差窗口相对很小。
 
 **Q：Broker 自己的签名私钥泄露怎么办？**
-攻击者可以伪造回执和检查点，但仍然拿不到 Credential（需要 `K_V`），也伪造不了 Capability（需要 AA 私钥）。处置方式是换新的 Broker 密钥和 `BROKER_KEY_ID`，并通知验证方不再信任旧公钥。已知限制有两条：当前公钥记录接口只发布当前密钥，不能把旧密钥标记为 REVOKED；换密钥需要重启 Broker。
+回执密钥和检查点密钥是分开的，泄露一把只能伪造对应的一类。攻击者仍然拿不到 Credential（需要 `K_V`），也伪造不了 Capability（需要 AA 私钥）。处置方式是换新的 Broker 密钥和 `BROKER_KEY_ID`，并通知验证方不再信任旧公钥。已知限制有两条：当前公钥记录接口只发布当前密钥，不能把旧密钥标记为 REVOKED；换密钥需要重启 Broker。
 
 **Q：DENIED 回执会不会被用来做 DoS？**
 只有 AA 签名验过的请求才会触发签名，攻击者至少要先拿到一张合法的 Capability。拿到之后，配上一份无效的 Holder Proof 反复提交，每次会让 Broker 多做一次 SM2 签名。这时一次拒绝的代价是一次验签加一次签名，大约是普通拒绝的两倍，属于常数级放大。缓解办法是按 Agent 或 Capability 限流，或者把 DENIED 回执改成按需签发。具体开销以 C 的压测结果为准。

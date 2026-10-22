@@ -46,6 +46,7 @@
 | 签发时间在未来（超出 5 秒偏差） | 同上 | `CAPABILITY_NOT_YET_VALID` | `capability_not_yet_valid` |
 | 原样重放整个 bundle | `challenge` | `CHALLENGE_USED` | `TestReplaySameBundle`；演示“原样重放” |
 | 同一 Capability 换新 Challenge 再提交 | `atomic_consume`（已是 `CONSUMED`） | 不拒绝，返回原结果和**同一张回执**，上游不再调用 | `TestReplaySameCapabilityNewChallenge`、`TestReceiptReplayIsIdentical`；演示“幂等返回同一回执” |
+| 两张不同的 Capability 复用同一 nonce | `atomic_consume`（nonce 唯一索引） | `CAPABILITY_NONCE_REUSED` | `TestCapabilityNonceReuseDenied`、`TestNonceIsSingleUse` |
 | 同一 Capability 携带不同请求 | `request_binding`（摘要不符）；绕过后由 `atomic_consume` 兜底 | `REQUEST_HASH_MISMATCH` / `IDEMPOTENCY_CONFLICT` | `capability/consume_test.go` `TestConsumeLifecycleAndIdempotency` |
 | 同一 Capability 并发提交 N 次 | `atomic_consume`（写锁 + CAS） | 1 次成功，其余 `REPLAY_IN_PROGRESS` 或返回原结果 | `TestConcurrentReplayExactlyOneWinner`（100 并发）、`TestConcurrentReplayWriteSideEffectOnce`（20 个完整 bundle，写入 1 次） |
 | 之前执行失败的 Capability 再试一次 | `atomic_consume` | `CAPABILITY_ALREADY_FAILED` | `TestFailedCapabilityCannotBeReused` |

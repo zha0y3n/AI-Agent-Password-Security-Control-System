@@ -34,9 +34,11 @@ type Server struct {
 	Credentials *credential.Service
 	Challenges  *challenge.Service
 	Auditor     *evidence.Auditor
-	Signer      *crypto.SM2Signer
-	Metrics     *metrics.Recorder
-	Log         *slog.Logger
+	Signer      *crypto.SM2Signer // Receipt 签名（RECEIPT_SIGNING）
+	// CheckpointSigner 签审计检查点，与 Receipt 密钥分开；Auditor 必须使用同一把密钥。
+	CheckpointSigner *crypto.SM2Signer
+	Metrics          *metrics.Recorder
+	Log              *slog.Logger
 
 	// Receipt 签名公钥的标识与有效期，按 A 的 PublicKeyRecord 格式公布。
 	KeyID        string

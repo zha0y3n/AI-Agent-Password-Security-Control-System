@@ -72,7 +72,7 @@ func setupExec(t *testing.T, enableReset bool) *execEnv {
 	now := time.Now().Unix()
 	srv := &api.Server{
 		BrokerID: "broker-01", AdminToken: adminToken,
-		Credentials: env.Credentials, Challenges: challenges, Auditor: env.Auditor, Signer: env.Signer,
+		Credentials: env.Credentials, Challenges: challenges, Auditor: env.Auditor, Signer: env.Signer, CheckpointSigner: env.CheckpointSigner,
 		Metrics: m, Log: logging.New(e.logs, "debug"),
 		KeyID: "broker-key-01", KeyNotBefore: now - 60, KeyNotAfter: now + 3600,
 		Capabilities: store,

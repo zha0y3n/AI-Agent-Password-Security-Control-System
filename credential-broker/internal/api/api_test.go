@@ -51,14 +51,15 @@ func setup(t *testing.T) (client, *bytes.Buffer) {
 	env := testenv.New(t)
 	var logs bytes.Buffer
 	srv := &api.Server{
-		BrokerID:    "broker-01",
-		AdminToken:  adminToken,
-		Credentials: env.Credentials,
-		Challenges:  challenge.NewService(env.DB, time.Minute, "broker-01"),
-		Auditor:     env.Auditor,
-		Signer:      env.Signer,
-		Metrics:     metrics.New(),
-		Log:         logging.New(&logs, "debug"),
+		BrokerID:         "broker-01",
+		AdminToken:       adminToken,
+		Credentials:      env.Credentials,
+		Challenges:       challenge.NewService(env.DB, time.Minute, "broker-01"),
+		Auditor:          env.Auditor,
+		Signer:           env.Signer,
+		CheckpointSigner: env.CheckpointSigner,
+		Metrics:          metrics.New(),
+		Log:              logging.New(&logs, "debug"),
 	}
 	ts := httptest.NewServer(srv.Handler())
 	t.Cleanup(ts.Close)
@@ -132,7 +133,10 @@ func TestAuditExportVerifiesWithPublishedKey(t *testing.T) {
 	var recs struct{ Records []evidence.Record }
 	var cps struct{ Checkpoints []evidence.Checkpoint }
 	var key struct {
-		PublicKey string `json:"public_key"`
+		PublicKey     string `json:"public_key"`
+		CheckpointKey struct {
+			PublicKey string `json:"public_key"`
+		} `json:"checkpoint_key"`
 	}
 	_, b := c.do("GET", "/v1/audit?from=1&limit=1000", "", nil)
 	json.Unmarshal([]byte(b), &recs)
@@ -141,7 +145,14 @@ func TestAuditExportVerifiesWithPublishedKey(t *testing.T) {
 	_, b = c.do("GET", "/v1/broker/public-key", "", nil)
 	json.Unmarshal([]byte(b), &key)
 
-	pub, err := crypto.ParseSM2PublicKeyHex(key.PublicKey)
+	if key.CheckpointKey.PublicKey == "" || key.CheckpointKey.PublicKey == key.PublicKey {
+		t.Fatal("checkpoint key must be published and differ from the receipt key")
+	}
+	pub, err := crypto.ParseSM2PublicKeyHex(key.CheckpointKey.PublicKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	receiptPub, err := crypto.ParseSM2PublicKeyHex(key.PublicKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -150,6 +161,10 @@ func TestAuditExportVerifiesWithPublishedKey(t *testing.T) {
 	}
 	if err := evidence.VerifyChain(recs.Records, cps.Checkpoints, pub); err != nil {
 		t.Fatal(err)
+	}
+	// Receipt 密钥不签检查点：用它验证必须失败。
+	if err := evidence.VerifyChain(recs.Records, cps.Checkpoints, receiptPub); err == nil {
+		t.Fatal("checkpoint verified with the receipt key")
 	}
 	if code, _ := c.do("GET", "/v1/audit?limit=5000", "", nil); code != 400 {
 		t.Fatalf("limit bound: %d", code)

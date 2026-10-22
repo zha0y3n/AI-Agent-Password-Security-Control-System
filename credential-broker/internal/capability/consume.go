@@ -38,8 +38,10 @@ const (
 var (
 	// ErrRequestMismatch：同一 cap_id 携带了不同的 request_hash（幂等冲突）。
 	ErrRequestMismatch = errors.New("capability already bound to a different request")
-	// ErrClaimMismatch：同一 cap_id 携带了不同的 credential_id / epoch。
+	// ErrClaimMismatch：同一 cap_id 携带了不同的 credential_id / epoch / nonce。
 	ErrClaimMismatch = errors.New("capability claim does not match recorded claim")
+	// ErrNonceReused：该 nonce 已属于另一个 cap_id（docs/a-b-interface.md 第 7 步要求检查 Capability nonce）。
+	ErrNonceReused = errors.New("capability nonce already used by another capability")
 	// ErrInProgress：另一请求已赢得消费权且尚未完成（并发重放）。
 	ErrInProgress = errors.New("capability is being consumed")
 	// ErrAlreadyFailed：该 Capability 之前的执行已失败，不可再次使用。
@@ -54,6 +56,8 @@ type Claim struct {
 	RequestHash     string
 	CredentialID    string
 	CredentialEpoch int64
+	// Nonce 是 Capability 签名中的一次性随机数，全局唯一。为空时不参与唯一性约束（仅内部测试使用）。
+	Nonce string
 }
 
 // Outcome 区分“本次赢得执行权”与“幂等重放返回旧结果”。
@@ -91,21 +95,26 @@ func (s *Store) Consume(ctx context.Context, c Claim) (*Result, error) {
 	err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
 		now := s.now().Unix()
 		if _, err := tx.ExecContext(ctx, `
-			INSERT OR IGNORE INTO capabilities(cap_id, state, request_hash, credential_id, credential_epoch, created_at, updated_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?)`,
-			c.CapID, StateIssued, c.RequestHash, c.CredentialID, c.CredentialEpoch, now, now); err != nil {
+			INSERT OR IGNORE INTO capabilities(cap_id, state, request_hash, credential_id, credential_epoch, nonce, created_at, updated_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+			c.CapID, StateIssued, c.RequestHash, c.CredentialID, c.CredentialEpoch, c.Nonce, now, now); err != nil {
 			return err
 		}
 
 		var rec Claim
 		var state State
 		var stored []byte
-		if err := tx.QueryRowContext(ctx, `
-			SELECT state, request_hash, credential_id, credential_epoch, result FROM capabilities WHERE cap_id = ?`, c.CapID).
-			Scan(&state, &rec.RequestHash, &rec.CredentialID, &rec.CredentialEpoch, &stored); err != nil {
+		err := tx.QueryRowContext(ctx, `
+			SELECT state, request_hash, credential_id, credential_epoch, nonce, result FROM capabilities WHERE cap_id = ?`, c.CapID).
+			Scan(&state, &rec.RequestHash, &rec.CredentialID, &rec.CredentialEpoch, &rec.Nonce, &stored)
+		if errors.Is(err, sql.ErrNoRows) {
+			// INSERT OR IGNORE 因 nonce 唯一索引冲突而被忽略：该 nonce 已属于另一个 Capability。
+			return ErrNonceReused
+		}
+		if err != nil {
 			return err
 		}
-		if rec.CredentialID != c.CredentialID || rec.CredentialEpoch != c.CredentialEpoch {
+		if rec.CredentialID != c.CredentialID || rec.CredentialEpoch != c.CredentialEpoch || rec.Nonce != c.Nonce {
 			return ErrClaimMismatch
 		}
 		if rec.RequestHash != c.RequestHash {
@@ -137,7 +146,7 @@ func (s *Store) Consume(ctx context.Context, c Claim) (*Result, error) {
 		}
 		if _, err := s.audit.Append(ctx, tx, "capability.consume", map[string]any{
 			"cap_id": c.CapID, "request_hash": c.RequestHash,
-			"credential_id": c.CredentialID, "credential_epoch": c.CredentialEpoch,
+			"credential_id": c.CredentialID, "credential_epoch": c.CredentialEpoch, "nonce": c.Nonce,
 		}); err != nil {
 			return err
 		}
@@ -195,6 +204,7 @@ type Info struct {
 	RequestHash     string `json:"request_hash"`
 	CredentialID    string `json:"credential_id"`
 	CredentialEpoch int64  `json:"credential_epoch"`
+	Nonce           string `json:"nonce,omitempty"`
 	ErrorCode       string `json:"error_code,omitempty"`
 	CreatedAt       int64  `json:"created_at"`
 	UpdatedAt       int64  `json:"updated_at"`
@@ -205,9 +215,9 @@ func (s *Store) Get(ctx context.Context, capID string) (*Info, error) {
 	var in Info
 	var code sql.NullString
 	err := s.db.QueryRowContext(ctx, `
-		SELECT cap_id, state, request_hash, credential_id, credential_epoch, error_code, created_at, updated_at
+		SELECT cap_id, state, request_hash, credential_id, credential_epoch, nonce, error_code, created_at, updated_at
 		FROM capabilities WHERE cap_id = ?`, capID).
-		Scan(&in.CapID, &in.State, &in.RequestHash, &in.CredentialID, &in.CredentialEpoch, &code, &in.CreatedAt, &in.UpdatedAt)
+		Scan(&in.CapID, &in.State, &in.RequestHash, &in.CredentialID, &in.CredentialEpoch, &in.Nonce, &code, &in.CreatedAt, &in.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}

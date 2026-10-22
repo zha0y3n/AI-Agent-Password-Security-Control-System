@@ -9,6 +9,7 @@ import (
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/credential"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/crypto"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/errcode"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/evidence"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/secret"
 )
 
@@ -20,10 +21,18 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok", "broker_id": s.BrokerID})
 }
 
-// publicKey 公布 Broker 的 SM2 公钥：public_key 为 04‖X‖Y 十六进制（审计检查点使用），
-// public_key_pem 为 SubjectPublicKeyInfo，key_record 为 A 的 PublicKeyRecord（Receipt 验签使用）。
+// publicKey 公布 Broker 的两把 SM2 公钥：
+//
+//   - 顶层字段是 Receipt 签名公钥：public_key 为 04‖X‖Y 十六进制，public_key_pem 为 SubjectPublicKeyInfo，
+//     key_record 为 A 的 PublicKeyRecord（用途 RECEIPT_SIGNING，只签回执）；
+//   - checkpoint_key 是审计检查点的签名公钥（A 的公钥模型没有这一用途，因此只在这里公布，不进 key-registry）。
 func (s *Server) publicKey(w http.ResponseWriter, r *http.Request) {
 	rec, err := s.keyRecord()
+	if err != nil {
+		s.internalError(w, err)
+		return
+	}
+	cpPEM, err := crypto.MarshalSM2PublicKeyPEM(s.CheckpointSigner.PublicKey())
 	if err != nil {
 		s.internalError(w, err)
 		return
@@ -38,6 +47,12 @@ func (s *Server) publicKey(w http.ResponseWriter, r *http.Request) {
 		"public_key":     s.Signer.PublicKeyHex(),
 		"public_key_pem": rec["public_key_pem"],
 		"key_record":     rec,
+		"checkpoint_key": map[string]any{
+			"purpose":        "AUDIT_CHECKPOINT",
+			"domain":         evidence.CheckpointDomain,
+			"public_key":     s.CheckpointSigner.PublicKeyHex(),
+			"public_key_pem": cpPEM,
+		},
 	})
 }
 

@@ -15,11 +15,12 @@ import (
 
 // Env 聚合测试所需依赖。
 type Env struct {
-	DB          *repository.DB
-	Vault       *vault.Vault
-	Signer      *crypto.SM2Signer
-	Auditor     *evidence.Auditor
-	Credentials *credential.Service
+	DB               *repository.DB
+	Vault            *vault.Vault
+	Signer           *crypto.SM2Signer // Receipt 签名
+	CheckpointSigner *crypto.SM2Signer // 审计检查点签名（Auditor 使用）
+	Auditor          *evidence.Auditor
+	Credentials      *credential.Service
 }
 
 // New 创建一套全新的依赖，测试结束自动清理。
@@ -38,6 +39,10 @@ func New(t testing.TB) *Env {
 	if err != nil {
 		t.Fatal(err)
 	}
-	a := evidence.NewAuditor(db, signer, 0)
-	return &Env{DB: db, Vault: v, Signer: signer, Auditor: a, Credentials: credential.NewService(db, v, a)}
+	cpSigner, err := crypto.GenerateSM2Signer()
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := evidence.NewAuditor(db, cpSigner, 0)
+	return &Env{DB: db, Vault: v, Signer: signer, CheckpointSigner: cpSigner, Auditor: a, Credentials: credential.NewService(db, v, a)}
 }
