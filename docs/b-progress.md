@@ -38,7 +38,7 @@
 
 `scripts/e2e-demo.py` 通过真实 HTTP 跑通 Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit，覆盖重放、幂等、篡改请求、篡改 Capability、被窃取 Capability、伪造 Challenge、提示注入、旧 Epoch，并核对上游调用次数和审计链。
 
-A 已实现可选的 `BROKER_LIVE`：签发前读取 `GET /v1/credentials/{id}/status` 的当前 `ACTIVE` epoch。2026-10-21 用 A 的 `scripts/e2e-lifecycle.py` 对真实 Broker + Mock 进程完成生命周期联调，HTTP 与 HTTPS 各 13/13（ACTIVE、签发与执行之间轮换、撤销、Status 不可用）。B 已支持 mTLS（`BROKER_TLS_CLIENT_CA_FILE`），但 A 的 Status 查询尚不能出示客户端证书。B 执行事务内的 `ACTIVE + epoch` 原子检查仍是最终线性化点。
+A 已实现可选的 `BROKER_LIVE`：签发前读取 `GET /v1/credentials/{id}/status` 的当前 `ACTIVE` epoch。2026-10-21 用 A 的 `scripts/e2e-lifecycle.py` 对真实 Broker + Mock 进程完成生命周期联调，HTTP 与 HTTPS 各 13/13（ACTIVE、签发与执行之间轮换、撤销、Status 不可用）。B 已支持 mTLS（`BROKER_TLS_CLIENT_CA_FILE`）；A 的 Status 查询已能出示客户端证书（B 协助修改，待 A 复核），对真实 B 的 mTLS 模式已验证。B 执行事务内的 `ACTIVE + epoch` 原子检查仍是最终线性化点。
 
 同日补齐的 B 侧项：启动时把崩溃遗留的 `CONSUMING` 改为 `FAILED`；`SIGHUP` 热加载 AA / Agent 公钥表；HTTPS / mTLS 监听。
 
@@ -50,7 +50,7 @@ Capability 状态查询、审计复核接口、状态重置（`BROKER_ENABLE_RES
 
 - `result_envelope` 结构与 Receipt 返回方式（B 的提案见 `credential-broker/README.md`），需写入 `shared/`。
 - 统一错误码表：A 的 `CREDENTIAL_STATUS_*` 与 B 的 `CREDENTIAL_EPOCH_MISMATCH` / `CREDENTIAL_INACTIVE` 尚未合并成一张表。
-- A 的 Status 查询需支持客户端证书，才能在 B 开启 mTLS 时使用 `BROKER_LIVE`；默认 `STATIC_DEMO` 仍把 `github-prod` 对齐到 17。
+- A 复核 B 代改的 mTLS 客户端证书支持；默认 `STATIC_DEMO` 仍把 `github-prod` 对齐到 17。
 
 ## 阶段五：竞赛化（文档完成）
 

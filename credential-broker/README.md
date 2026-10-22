@@ -26,7 +26,7 @@ Go 实现，国密原语来自 [`emmansun/gmsm`](https://github.com/emmansun/gms
 **B 约 92%。** 剩下的部分：
 
 - 等 A/C 联审：`result_envelope`、统一错误码表、C 的接口需求。
-- A 端 mTLS 客户端证书：B 已支持 `BROKER_TLS_CLIENT_CA_FILE`，但 A 的 Status 查询还不能出示客户端证书，开启 mTLS 后 A 会按预期返回 `CREDENTIAL_STATUS_UNAVAILABLE`。
+- A 端 mTLS：A 的 Status 查询已能出示客户端证书（`broker_status_client_cert_file` / `broker_status_client_key_file`，B 协助修改，待 A 复核）；与真实 B 的 mTLS 模式已验证。
 
 2026-10-21 补齐的 B 侧项目：
 

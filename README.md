@@ -6,7 +6,7 @@
 
 | 模块 | 负责 | 完整度 | 当前状态 | 主要证据 |
 |---|---|---:|---|---|
-| A：Agent + AA（Python） | A | **95%** | 第 1～6 周期 A 范围完成；Capability/Holder Proof/Receipt 参考实现；新增可选 Broker 实时 Credential Epoch 绑定与 P0 硬化 | `pytest agent-aa/tests -q`：71 passed；`agent-aa demo`：`verified: true` |
+| A：Agent + AA（Python） | A | **95%** | 第 1～6 周期 A 范围完成；Capability/Holder Proof/Receipt 参考实现；新增可选 Broker 实时 Credential Epoch 绑定与 P0 硬化 | `pytest agent-aa/tests -q`：79 passed；`agent-aa demo`：`verified: true` |
 | B：Broker + Vault（Go） | B | **92%** | 阶段一～五完成；`/v1/execute`、Vault、原子消费、Receipt、审计链、Compose、E2E 已具备 | B 文档记录：`go test -race ./...`、`make interop`、Compose E2E 14/14 |
 | C：评测 + Dashboard | C | **88%** | 7 类实验脚本、7 份 CSV、7 Tab Dashboard、一键启动已提交 | 已提交 CSV 共 110 条记录，全部标记通过；待干净环境复现 |
 | 全链路 | A+B+C | **92%** | A+B 已通过真实 HTTP 跑通；A 的 `BROKER_LIVE` 已合入；C 的系统实验已落盘 | 三方等权自评；最终以干净环境复现和答辩材料为准 |
@@ -88,13 +88,13 @@ evaluation-dashboard（C）
 验证：
 
 ```bash
-.venv/bin/pytest agent-aa/tests -q     # 71 passed
+.venv/bin/pytest agent-aa/tests -q     # 79 passed
 .venv/bin/agent-aa demo                # verified: true
 ```
 
 剩余：
 
-- 与真实 B 的 TLS/mTLS 生命周期联调（轮换、撤销、Status 不可用/伪造、撤销竞态）；
+- 与真实 B 的生命周期联调已跑通（HTTP/HTTPS 各 13/13，mTLS 客户端证书已验证）；伪造 Status 与撤销竞态尚未在真实联调中覆盖；
 - 生产密钥托管（HSM/Secret Manager/独立 Holder Signer）；
 - A 不实现 B/C 的 Vault、原子消费或系统实验。
 
@@ -204,7 +204,7 @@ streamlit run evaluation-dashboard/dashboard/app.py
 
 | 范围 | 命令 | 结果 | 日期 |
 |---|---|---|---|
-| A 单元/协议 | `pytest agent-aa/tests -q` | 71 passed | 2026-10-22 |
+| A 单元/协议 | `pytest agent-aa/tests -q` | 79 passed | 2026-10-22 |
 | A+B 生命周期 | `scripts/e2e-lifecycle.py --reset` | 待 B 运行环境执行 | 2026-10-22 |
 | A 闭环 | `agent-aa demo` | `verified: true` | 2026-10-22 |
 | B Go | `go test -race ./...` | 通过 | 2026-10-18（B 文档） |
@@ -216,7 +216,7 @@ streamlit run evaluation-dashboard/dashboard/app.py
 
 ## 已知问题与剩余工作
 
-1. **A+B 生命周期真实联调**：A 已实现 `BROKER_LIVE`，但尚未与真实 B 完成 TLS/mTLS、轮换、撤销、Status 不可用/伪造、撤销竞态联调。
+1. **A+B 生命周期真实联调**：轮换、撤销、Status 不可用已对真实 B 跑通（HTTP/HTTPS 各 13/13），mTLS 客户端证书已验证；伪造 Status 与撤销竞态尚待覆盖。
 2. **`result_envelope` 未固化**：仍是 B 的提案，需 A/B/C 联审后写入 `shared/schemas/`，并统一 Receipt 返回和幂等重放语义。
 3. **统一错误码表**：A 的 `CREDENTIAL_STATUS_*` 与 B 的 `CREDENTIAL_EPOCH_MISMATCH` / `CREDENTIAL_INACTIVE` 尚未合并为一张表。
 4. **C 干净环境复现**：需要记录硬件、Go/Python 版本、启动顺序、CSV 生成时间；历史硬编码 token 如使用过需轮换。

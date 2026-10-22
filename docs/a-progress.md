@@ -36,6 +36,6 @@
 
 最近一次本机运行：`71 passed`。覆盖 Canonical JSON、SM3 已知答案、SM2 正常/篡改、正常签发、错误资源/Body/Task、布尔值与整数语义区分、TTL、票据/epoch 篡改、过期、跨任务/服务/资源/操作/路径、RequestHash、Audience、Wrong Holder、Challenge、Proof 过期、Receipt 篡改/验签 API、API 正常/拒绝/重复字段、Broker 实时 epoch/status 失败关闭、真实 HTTP Status、请求体/深递归保护，以及 Capability/Holder Proof/Receipt 三类共享向量。本机 OpenSSL 3.0.13 也用显式 SM2 ID 成功验证了这三类铜锁签名。
 
-未执行/未完成（A 范围）：A 的 Status 查询与真实 B 的 TLS/mTLS 及生命周期联调尚未执行；已提供 `scripts/e2e-lifecycle.py`，待有 B 运行环境时执行 ACTIVE/轮换/撤销/Status 不可用场景。B/C 的 Go 向量验签、Broker 执行时原子 lifecycle 检查、Vault、replay/并发 CAS、真实业务副作用、性能、提示注入、Dashboard 和审计链由 B/C 负责，不能由 A 的 reference verifier 或模拟 Status 响应替代。
+2026-10-21（B 协助修改，待 A 复核）：Status 查询支持部署 CA 与客户端证书（`broker_status_ca_file`、`broker_status_client_cert_file`、`broker_status_client_key_file`），`79 passed`。`scripts/e2e-lifecycle.py` 已对真实 B 进程跑通，HTTP 与 HTTPS 各 13/13；B 开启 mTLS 时，配置客户端证书的 AA 能读到实时 epoch，未配置的按预期返回 `CREDENTIAL_STATUS_UNAVAILABLE`。撤销竞态与伪造 Status 场景仍未在真实联调中覆盖。B/C 的 Go 向量验签、Broker 执行时原子 lifecycle 检查、Vault、replay/并发 CAS、真实业务副作用、性能、提示注入、Dashboard 和审计链由 B/C 负责，不能由 A 的 reference verifier 或模拟 Status 响应替代。
 
 环境说明：当前工作区位于 WSL 的 `/mnt/e` 挂载盘，运行时对私钥执行 `chmod 0600` 后仍报告 `0777`。代码现会显式告警；本机生成的 `.runtime/` 仅用于演示且已 gitignore，不能作为生产密钥存储。

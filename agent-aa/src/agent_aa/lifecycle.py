@@ -9,11 +9,12 @@ time; a lookup here is not a replacement for that linearization point.
 from __future__ import annotations
 
 import http.client
+import ssl
 from collections.abc import Callable, Mapping
 from typing import Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit, urlunsplit
-from urllib.request import HTTPRedirectHandler, Request, build_opener
+from urllib.request import HTTPRedirectHandler, HTTPSHandler, OpenerDirector, Request, build_opener
 
 from pydantic import ValidationError
 
@@ -38,18 +39,43 @@ class _NoRedirect(HTTPRedirectHandler):
         return None
 
 
-_NO_REDIRECT_OPENER = build_opener(_NoRedirect())
+def make_status_ssl_context(
+    *,
+    ca_file: str | None = None,
+    client_cert_file: str | None = None,
+    client_key_file: str | None = None,
+) -> ssl.SSLContext:
+    """Build the TLS context for Broker status lookups.
+
+    ``ca_file`` replaces the system trust store with a deployment CA.  The client
+    certificate and key are presented when the Broker requires mTLS; they must be
+    configured together.  Any file that cannot be loaded raises at startup.
+    """
+
+    if (client_cert_file is None) != (client_key_file is None):
+        raise ValueError("Broker status client certificate and key must be configured together")
+    context = ssl.create_default_context(cafile=ca_file)
+    context.minimum_version = ssl.TLSVersion.TLSv1_2
+    if client_cert_file is not None:
+        context.load_cert_chain(certfile=client_cert_file, keyfile=client_key_file)
+    return context
 
 
-def _https_fetch(url: str, timeout_seconds: float) -> tuple[int, bytes]:
-    request = Request(url, headers={"Accept": "application/json"}, method="GET")
-    try:
-        with _NO_REDIRECT_OPENER.open(request, timeout=timeout_seconds) as response:
-            return int(response.status), response.read(MAX_STATUS_RESPONSE_BYTES + 1)
-    except HTTPError as exc:
-        # An HTTP error is still a failed closed lifecycle lookup.  Its response
-        # body is intentionally not parsed or exposed to an Agent.
-        return int(exc.code), b""
+def _make_fetch(opener: OpenerDirector) -> StatusFetch:
+    def fetch(url: str, timeout_seconds: float) -> tuple[int, bytes]:
+        request = Request(url, headers={"Accept": "application/json"}, method="GET")
+        try:
+            with opener.open(request, timeout=timeout_seconds) as response:
+                return int(response.status), response.read(MAX_STATUS_RESPONSE_BYTES + 1)
+        except HTTPError as exc:
+            # An HTTP error is still a failed closed lifecycle lookup.  Its response
+            # body is intentionally not parsed or exposed to an Agent.
+            return int(exc.code), b""
+
+    return fetch
+
+
+_https_fetch = _make_fetch(build_opener(_NoRedirect()))
 
 
 class BrokerCredentialStatusResolver:
@@ -58,6 +84,8 @@ class BrokerCredentialStatusResolver:
     ``endpoints`` is AA-controlled deployment configuration, not Agent input.
     HTTPS is mandatory by default.  A development-only HTTP opt-in exists for
     the local Docker/loopback demo and must never be enabled in production.
+    ``ssl_context`` (see ``make_status_ssl_context``) supplies a deployment CA
+    and, for Brokers that require mTLS, the AA's client certificate.
     """
 
     def __init__(
@@ -66,7 +94,8 @@ class BrokerCredentialStatusResolver:
         *,
         timeout_seconds: float = 2.0,
         allow_insecure_http: bool = False,
-        fetch: StatusFetch = _https_fetch,
+        ssl_context: ssl.SSLContext | None = None,
+        fetch: StatusFetch | None = None,
     ) -> None:
         if not 0 < timeout_seconds <= 30:
             raise ValueError("Broker status timeout must be between 0 and 30 seconds")
@@ -74,6 +103,16 @@ class BrokerCredentialStatusResolver:
             audience: self._validate_endpoint(url, allow_insecure_http=allow_insecure_http)
             for audience, url in endpoints.items()
         }
+        if ssl_context is not None and any(urlsplit(url).scheme != "https" for url in self._endpoints.values()):
+            # A TLS context on a plain HTTP endpoint would silently drop server
+            # authentication and the client certificate.
+            raise ValueError("Broker status TLS settings require HTTPS endpoints")
+        if fetch is None:
+            fetch = (
+                _https_fetch
+                if ssl_context is None
+                else _make_fetch(build_opener(_NoRedirect(), HTTPSHandler(context=ssl_context)))
+            )
         self._timeout_seconds = timeout_seconds
         self._fetch = fetch
 

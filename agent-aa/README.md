@@ -45,7 +45,7 @@ Holder Proof 绑定：Capability 哈希、实际请求哈希、Broker Audience�
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e './agent-aa[dev]'
-.venv/bin/pytest agent-aa/tests -q     # 71 passed
+.venv/bin/pytest agent-aa/tests -q     # 79 passed
 .venv/bin/agent-aa demo                # verified: true
 ```
 
@@ -95,9 +95,19 @@ bash scripts/run-a.sh
     "broker-01": "https://broker.internal.example"
   },
   "broker_status_timeout_seconds": 2,
-  "allow_insecure_broker_status_urls": false
+  "allow_insecure_broker_status_urls": false,
+  "broker_status_ca_file": "broker-ca.pem",
+  "broker_status_client_cert_file": "aa-client.pem",
+  "broker_status_client_key_file": "aa-client.key"
 }
 ```
+
+三个 TLS 字段都是可选的，路径相对于运行时目录：
+
+- `broker_status_ca_file`：用部署 CA 代替系统信任库校验 Broker 证书；
+- `broker_status_client_cert_file` / `broker_status_client_key_file`：Broker 开启 mTLS（`BROKER_TLS_CLIENT_CA_FILE`）时出示的 AA 客户端证书，必须同时设置。
+
+任一文件无法加载、证书与私钥只配了一个、或者在 HTTP 端点上配置 TLS 字段，AA 都会拒绝启动。
 
 AA 只在 AgentRequest 已完整匹配服务端 `AllowedAction` 后，查询该 audience 对应的：
 
@@ -126,18 +136,19 @@ Accept: application/json
 - `CREDENTIAL_STATUS_MISMATCH`：返回的 Credential ID 与可信 Action 不同；
 - `CREDENTIAL_INACTIVE`：状态不是 `ACTIVE`。
 
-默认仅允许 HTTPS；本机 Docker/loopback 如只能使用 HTTP，必须显式设置 `allow_insecure_broker_status_urls=true`，且只能用于开发环境。
+默认仅允许 HTTPS（TLS ≥ 1.2）；本机 Docker/loopback 如只能使用 HTTP，必须显式设置 `allow_insecure_broker_status_urls=true`，且只能用于开发环境。
 
 **边界：** AA 的签发前查询只缩短状态陈旧窗口，不替代 Broker 在执行事务内对 `ACTIVE + epoch` 的原子复核。
 
 ## 测试覆盖
 
-`71 passed` 覆盖：
+`79 passed` 覆盖：
 
 - Canonical JSON、SM3 已知答案、SM2 正常/篡改、非法 DER；
 - 正常签发、错误资源/Body/Task、TTL、过期、跨任务/服务/资源/操作/路径；
 - RequestHash、Audience、Wrong Holder、Challenge、Proof 过期；
 - Receipt 篡改/验签 API；
+- Broker Status 查询的 mTLS：受信客户端证书成功；无证书、非受信 CA 的客户端证书、非受信服务端证书均失败关闭；TLS 配置错误在启动时拒绝；
 - `BROKER_LIVE` 实时 epoch 绑定、撤销状态拒绝、HTTP/响应/身份错误失败关闭；
 - 真实本地 HTTP Status：重定向、超过 16 KiB、超时、坏状态行、截断响应、非 200、ID 不一致、非 ACTIVE；
 - `BROKER_LIVE` 经 `/v1/capabilities/issue` 的成功路径、`STATIC_DEMO` 不查询 Broker、TTL 拒绝先于查询；

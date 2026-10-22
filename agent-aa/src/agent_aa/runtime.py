@@ -17,7 +17,7 @@ from .authority import AuthorizationAuthority
 from .canonical import canonical_json, strict_json_loads
 from .crypto import generate_sm2_private_key, load_private_key_pem, save_private_key
 from .keys import KeyRegistry, make_public_key_record
-from .lifecycle import BrokerCredentialStatusResolver
+from .lifecycle import BrokerCredentialStatusResolver, make_status_ssl_context
 from .models import AllowedAction, StrictModel, TaskContext, TaskStoreDocument
 from .policy import AuthorizationPolicy, TrustedTaskStore
 
@@ -32,6 +32,11 @@ class RuntimeConfig(StrictModel):
     broker_status_endpoints: dict[str, str] = Field(default_factory=dict)
     broker_status_timeout_seconds: int = Field(default=2, ge=1, le=30)
     allow_insecure_broker_status_urls: bool = False
+    # Paths are relative to the runtime directory.  The client certificate and
+    # key are needed only when the Broker enforces mTLS.
+    broker_status_ca_file: str | None = None
+    broker_status_client_cert_file: str | None = None
+    broker_status_client_key_file: str | None = None
 
 
 def _write_json(path: Path, value: Any, *, overwrite: bool) -> None:
@@ -127,10 +132,24 @@ def load_runtime(directory: Path) -> tuple[AuthorizationAuthority, KeyRegistry, 
         missing_audiences = required_audiences.difference(config.broker_status_endpoints)
         if missing_audiences:
             raise ValueError("Broker live-status configuration is missing a trusted task audience")
+        tls_files = (
+            config.broker_status_ca_file,
+            config.broker_status_client_cert_file,
+            config.broker_status_client_key_file,
+        )
+        ssl_context = None
+        if any(path is not None for path in tls_files):
+            ca_file, cert_file, key_file = (
+                None if path is None else str(directory / path) for path in tls_files
+            )
+            ssl_context = make_status_ssl_context(
+                ca_file=ca_file, client_cert_file=cert_file, client_key_file=key_file
+            )
         status_resolver = BrokerCredentialStatusResolver(
             config.broker_status_endpoints,
             timeout_seconds=config.broker_status_timeout_seconds,
             allow_insecure_http=config.allow_insecure_broker_status_urls,
+            ssl_context=ssl_context,
         )
     authority = AuthorizationAuthority(
         issuer_id=config.issuer_id,
