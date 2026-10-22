@@ -44,6 +44,8 @@ type Server struct {
 	KeyID        string
 	KeyNotBefore int64
 	KeyNotAfter  int64
+	// RetiredKeys 是以前的 Receipt 签名公钥记录（见 LoadRetiredKeys），与当前公钥一起发布。
+	RetiredKeys []any
 
 	// Executor 为 nil 时 POST /v1/execute 返回 503。
 	Executor     *execution.Executor

@@ -285,6 +285,7 @@ sh scripts/reset.sh                   # 清空 Broker（Credential、Capability�
 | `BROKER_ADMIN_TOKEN` | **必填** | ≥16 字符：`openssl rand -hex 24` |
 | `BROKER_KEY_ID` | `broker-key-01` | Receipt 签名公钥标识 |
 | `BROKER_KEY_VALIDITY` | `8760h` | 公钥记录有效期 |
+| `BROKER_RETIRED_KEYS` | 空 | 以前的 Receipt 签名公钥（A 的 `KeyRegistryDocument` 格式），与当前公钥一起发布；见下方“轮换 Broker 签名密钥” |
 | `BROKER_TRUSTED_ISSUER` | 空 | 唯一信任的 AA issuer（A 开发运行时为 `aa-demo-01`） |
 | `BROKER_KEY_REGISTRY` | 空 | AA / Agent 公钥表（A 运行时的 `public-keys.json`）；和上一项必须同时设置，否则 `/v1/execute` 返回 503 |
 | `BROKER_CLOCK_SKEW` | `5s` | 只放宽“签发时间在未来”的判断，和 A 的参考校验器一致 |
@@ -297,6 +298,19 @@ sh scripts/reset.sh                   # 清空 Broker（Credential、Capability�
 | `BROKER_TLS_CLIENT_CA_FILE` | 空 | 设置后要求并校验客户端证书（mTLS），需要先开启 TLS |
 | `BROKER_LOG_LEVEL` | `info` | 日志只记录方法、路径、状态码、耗时，从不记录请求体或头部 |
 | `MOCK_ADDR` / `MOCK_GIT_TOKEN` / `MOCK_DB_TOKEN` | `:9090` / 必填 / 必填 | Mock 上游期望的 Credential，必须和录入 Vault 的值一致 |
+
+## 轮换 Broker 签名密钥
+
+```bash
+# 1. 保存当前公钥记录（轮换后旧回执要靠它验证）
+curl -s $BROKER_URL/v1/broker/key-registry > retired.json
+# 2. 正常下线：保留 "status": "ACTIVE"，旧回执在 [not_before, not_after) 内仍可验证
+#    密钥泄露：改为 "status": "REVOKED"，验证方拒绝它签的全部回执
+# 3. 换新密钥与新标识后重启
+export BROKER_SIGNING_KEY_FILE=data/broker-sm2-02.key BROKER_KEY_ID=broker-key-02 BROKER_RETIRED_KEYS=retired.json
+```
+
+`BROKER_RETIRED_KEYS` 中每条记录必须是本 Broker 的 `RECEIPT_SIGNING` 公钥，`key_id` 与公钥都不能和当前密钥相同，否则 Broker 拒绝启动。再次轮换时，把新的旧记录追加进同一个文件。
 
 ## 测试
 
@@ -351,7 +365,7 @@ docs/                 设计说明、威胁与防御对照、答辩材料
 - **从旧版本升级**：检查点改用独立密钥后，旧数据库中由 Receipt 密钥签的检查点无法通过 `/v1/audit/verify`。开发 / 实验环境请执行一次 `reset`。
 - **DENIED 回执**：只为已验签的 Capability 签发，每次拒绝都要做一次 SM2 签名。如果 C 的压测发现这部分开销明显，可以改为按需签发。
 - **外部 API 成功但状态未落盘**：上游已执行而 Broker 写库前崩溃时，Capability 会停在 `CONSUMING`。重启时 Broker 把它们改为 `FAILED`，之后的提交返回 `CAPABILITY_ALREADY_FAILED`，不会重复执行；Agent 需要重新申请 Capability（新 Capability 的幂等键不同，上游无法去重）。恢复只在启动时进行，前提是同一数据库只有一个 Broker 进程。
-- **公钥轮换**：AA / Agent 公钥表可以用 `SIGHUP` 热加载。Broker 自己的 Receipt / 检查点密钥仍在启动时加载，更换需要重启；`/v1/broker/key-registry` 只发布当前密钥，无法把泄露的旧 Broker 密钥标记为 `REVOKED`，只能换用新的 `BROKER_KEY_ID` 并通知验证方。
+- **公钥轮换**：AA / Agent 公钥表可以用 `SIGHUP` 热加载。Broker 自己的 Receipt 密钥通过 `BROKER_RETIRED_KEYS` 轮换（旧公钥继续发布，泄露的标记为 `REVOKED`），但需要重启 Broker。审计检查点密钥换了以后，旧检查点无法用新公钥复核，换之前应先导出并保存旧公钥。
 - **传输层算法**：TLS 使用 Go 标准库（ECDSA / RSA 证书），不是国密 TLCP；协议层的签名与摘要仍是 SM2 / SM3。
 - **`POST /v1/admin/reset`** 会清空审计链，只能用于开发和实验环境。
 - **上游网络隔离**：Demo 中 Mock 上游可以从本机直接访问。没有 Credential 只会返回 401，但生产环境需要让上游只接受来自 Broker 的连接（mTLS 或网络策略）。

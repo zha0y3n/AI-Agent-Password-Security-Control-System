@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"os"
+	"sort"
 	"sync/atomic"
 	"unicode/utf8"
 
@@ -137,6 +138,16 @@ func (r *KeyRegistry) Lookup(keyID, purpose, subjectID string, at int64) (*ecdsa
 
 // Len 返回注册表中的公钥数量。
 func (r *KeyRegistry) Len() int { return len(r.records) }
+
+// Records 返回注册表中全部公钥记录的副本，按 key_id 排序。
+func (r *KeyRegistry) Records() []KeyRecord {
+	out := make([]KeyRecord, 0, len(r.records))
+	for _, rec := range r.records {
+		out = append(out, *rec)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].KeyID < out[j].KeyID })
+	return out
+}
 
 // KeyLookup 是校验流水线查找可信公钥所需的接口，由 *KeyRegistry 与 *ReloadableKeyRegistry 实现。
 type KeyLookup interface {

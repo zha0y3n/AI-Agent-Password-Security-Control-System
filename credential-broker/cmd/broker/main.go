@@ -96,6 +96,12 @@ func run() error {
 		KeyNotAfter:      notBefore + int64(cfg.KeyValidity/time.Second),
 	}
 	var keys *protocol.ReloadableKeyRegistry
+	if cfg.RetiredKeysPath != "" {
+		if srv.RetiredKeys, err = api.LoadRetiredKeys(cfg.RetiredKeysPath, cfg.BrokerID, cfg.KeyID, signer.PublicKey()); err != nil {
+			return fmt.Errorf("load BROKER_RETIRED_KEYS: %w", err)
+		}
+		log.Info("publishing retired receipt keys", "count", len(srv.RetiredKeys))
+	}
 	if cfg.KeyRegistryPath != "" {
 		keys, err = protocol.LoadReloadableKeyRegistry(cfg.KeyRegistryPath)
 		if err != nil {

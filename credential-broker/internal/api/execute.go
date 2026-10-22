@@ -63,7 +63,8 @@ func (s *Server) keyRegistry(w http.ResponseWriter, r *http.Request) {
 		s.internalError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"protocol_version": protocol.ProtocolVersion, "keys": []any{rec}})
+	keys := append([]any{rec}, s.RetiredKeys...)
+	writeJSON(w, http.StatusOK, map[string]any{"protocol_version": protocol.ProtocolVersion, "keys": keys})
 }
 
 // capabilityStatus 返回 Capability 的消费状态，供 C 断言重放 / 并发 / 撤销实验的最终状态。

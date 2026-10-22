@@ -32,6 +32,8 @@ type Config struct {
 	// Receipt 签名密钥的标识与有效期（对外公布为 A 格式的 PublicKeyRecord）。
 	KeyID       string
 	KeyValidity time.Duration
+	// RetiredKeysPath 是以前的 Receipt 签名公钥（A 的 KeyRegistryDocument 格式），可选。
+	RetiredKeysPath string
 
 	// 执行接口：可信 AA 的 issuer 与 AA / Agent 公钥表（A 的 public-keys.json 格式）。
 	// 两者都未配置时 POST /v1/execute 返回 503（fail closed）。
@@ -61,6 +63,7 @@ func Load() (*Config, error) {
 		UpstreamURL:       env("BROKER_UPSTREAM_URL", "http://127.0.0.1:9090"),
 		LogLevel:          env("BROKER_LOG_LEVEL", "info"),
 		KeyID:             env("BROKER_KEY_ID", "broker-key-01"),
+		RetiredKeysPath:   os.Getenv("BROKER_RETIRED_KEYS"),
 
 		TrustedIssuer:   os.Getenv("BROKER_TRUSTED_ISSUER"),
 		KeyRegistryPath: os.Getenv("BROKER_KEY_REGISTRY"),
