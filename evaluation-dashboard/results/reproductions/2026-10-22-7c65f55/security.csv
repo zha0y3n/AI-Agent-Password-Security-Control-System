@@ -1,0 +1,11 @@
+case_id,category,description,expected_decision,actual_decision,error_code,credential_accessed,side_effect_count,expected_http,actual_http,passed,latency_ms,timestamp
+normal,baseline,正常签发,ALLOW,ALLOW,,False,0,200,200,True,4.16,2026-10-22T01:27:02
+unknown_task,task,未知任务,DENY,DENY,UNKNOWN_TASK,False,0,403,403,True,1.57,2026-10-22T01:27:02
+wrong_resource,binding,换资源,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,1.36,2026-10-22T01:27:02
+wrong_operation,binding,换操作,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,1.24,2026-10-22T01:27:02
+wrong_path,binding,换路径,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,1.31,2026-10-22T01:27:02
+wrong_method,binding,换 HTTP 方法,DENY,DENY,REQUEST_NOT_AUTHORIZED,False,0,403,403,True,1.21,2026-10-22T01:27:02
+wrong_agent,identity,错误 agent,DENY,DENY,AGENT_TASK_MISMATCH,False,0,403,403,True,1.2,2026-10-22T01:27:02
+unknown_key,identity,未知 agent_key_id,DENY,DENY,AGENT_TASK_MISMATCH,False,0,403,403,True,1.42,2026-10-22T01:27:02
+ttl_zero,schema,ttl=0,DENY,DENY,SCHEMA_VALIDATION_FAILED,False,0,422,422,True,1.25,2026-10-22T01:27:02
+ttl_huge,schema,ttl 超长,DENY,DENY,SCHEMA_VALIDATION_FAILED,False,0,422,422,True,1.19,2026-10-22T01:27:02

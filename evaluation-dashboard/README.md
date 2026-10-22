@@ -94,7 +94,7 @@ Dashboard 读取 `results/` 下的 8 份 CSV，分为 issue 测试、verify 测�
 
 ## 复现记录
 
-复现时应记录硬件、操作系统、Go/Python 版本、启动顺序与 CSV 生成时间，并与原结果分目录存放。示例见 [results/reproductions/2026-10-21/README.md](results/reproductions/2026-10-21/README.md)。性能数据与硬件相关，不同机器之间不宜直接比较绝对值。
+复现时应记录硬件、操作系统、Go/Python 版本、启动顺序与 CSV 生成时间，并与原结果分目录存放。最新一次见 [results/reproductions/2026-10-22-7c65f55/README.md](results/reproductions/2026-10-22-7c65f55/README.md)。性能数据与硬件相关，不同机器之间不宜直接比较绝对值。
 
 ## 证据边界
 
