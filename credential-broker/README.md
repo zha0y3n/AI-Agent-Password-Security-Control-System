@@ -19,28 +19,29 @@ Go 实现，国密原语来自 [`emmansun/gmsm`](https://github.com/emmansun/gms
 |---|---|---|
 | 一：基础设施 | 国密封装、SQLite、SM4-GCM Vault、Credential 生命周期与 Epoch、原子消费、幂等、Mock 上游、审计哈希链、Challenge、埋点、Docker | 完成 |
 | 二：接入 A 的协议 | `ZTCANON-JSON-v1`、Request Hash、SM2 域分离验签（三组共享向量）、可信公钥表、校验流水线、`POST /v1/execute`、Receipt 签发（A 的 `ReceiptVerifier` 验过）、错误码与 HTTP 状态 | 完成；`result_envelope` 已固化进 `shared/` |
-| 三：A + B 联调 | 真实 HTTP 全链路：Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit；`e2e-demo.py` 的 7 类攻击样例全部按预期拒绝或幂等处理，旧 Epoch 另行手工验证 | 完成（B 侧）；A 已实现 `BROKER_LIVE`，待真实联调 |
+| 三：A + B 联调 | 真实 HTTP 全链路：Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit；`e2e-demo.py` 的 7 类攻击样例全部按预期拒绝或幂等处理；`e2e-lifecycle.py` 的生命周期联调 25/25 | 完成 |
 | 四：面向 C 的支撑 | 副作用计数、Capability 状态查询、审计导出 / 复核、Broker 公钥记录、Metrics、状态重置、种子数据与批量 Credential、docker compose | 完成；接口是否够用待 C 确认 |
 | 五：竞赛化 | 设计说明、威胁与防御对照、答辩材料（见上方“文档”） | 文档完成；之后只修 Bug，不改协议 |
 
-**B 约 92%。** 剩下的部分：
+**B 约 98%。** 剩下的是生产化项目：传输层改用国密 TLCP、真实上游的网络隔离、Vault 主密钥与管理令牌托管、多实例部署（目前单机 SQLite）。
 
-- 等 C 确认：接口是否够用。
-- A 端 mTLS：A 的 Status 查询已能出示客户端证书（`broker_status_client_cert_file` / `broker_status_client_key_file`，B 协助修改，待 A 复核）；与真实 B 的 mTLS 模式已验证。
+2026-10-21 补齐：
 
-2026-10-21 补齐的 B 侧项目：
-
-- **A+B 生命周期真实联调**：A 的 `scripts/e2e-lifecycle.py` 对真实 Broker + Mock 进程跑通，HTTP 与 HTTPS（A 的严格 HTTPS 模式）各 13/13：ACTIVE 签发执行、签发与执行之间轮换（旧票 `CREDENTIAL_EPOCH_MISMATCH`，未读 Credential、无副作用）、撤销后 AA 拒绝签发、Status 不可用时 AA 失败关闭。
-- **TLS / mTLS**：`BROKER_TLS_CERT_FILE` + `BROKER_TLS_KEY_FILE` 开启 HTTPS（TLS ≥ 1.2）；再设置 `BROKER_TLS_CLIENT_CA_FILE` 则强制校验客户端证书。
+- **A+B 生命周期真实联调**：A 的 `scripts/e2e-lifecycle.py` 对真实 Broker + Mock 进程 25/25（HTTP；HTTPS + Broker↔Mock mTLS 同样通过）。覆盖：签发与执行之间轮换；伪造 Status（未来 epoch、过期 epoch、撤销后仍称 ACTIVE）在执行时被拒；撤销后 AA 拒绝签发；Status 不可用；撤销与执行并发竞态 50 轮（35 轮先执行、15 轮先撤销），按审计链顺序核对全部可线性化。
+- **`result_envelope` 固化**：见下方“Execution Receipt”。
+- **统一错误码表**：[`docs/error-codes.md`](../docs/error-codes.md)，`internal/errcode/errcode_test.go` 守护。
 - **崩溃恢复**：启动时（开始监听之前）把停在 `CONSUMING` 的 Capability 改为 `FAILED`（`error_code=INTERNAL_ERROR`，审计事件 `capability.recover`），不重试。
-- **公钥表热加载**：`kill -HUP <broker>` 重新读取 `BROKER_KEY_REGISTRY`，整体通过严格解析才替换，否则保留旧表并记录错误；成功时写审计事件 `keys.reload`。
+- **公钥**：`kill -HUP <broker>` 热加载 AA / Agent 公钥表（审计事件 `keys.reload`）；`BROKER_RETIRED_KEYS` 轮换 Broker Receipt 公钥并可标记 `REVOKED`。
+- **传输**：Broker HTTPS / mTLS；Broker↔Mock mTLS（Credential 泄露也无法绕过 Broker 直接调用 Mock）。
+- **审计条目**：`ZTCANON-JSON-v1` 编码，旧条目仍可复核。
+- **DENIED 回执**：实测开销不到请求延迟的 1%，保持始终签发。
 
-最近一次 B 代码验证是 2026-10-18，已包含 A 在 PR #5 中的修复；A 的 PR #6 只增加 A 端可选 Status 查询，不改变 B 代码：
+最近一次验证（2026-10-21）：
 
 - `go vet`、`gofmt` 无问题，`go test -race ./...` 全部通过。
-- `make interop` 通过：A 的 `ReceiptVerifier` 接受了 Go 签发的回执，篡改后的副本被拒绝。
-- 用重新构建的镜像在 compose 里跑 `e2e`，14 项检查全部通过。
-- AA、Broker、Mock 的日志中查不到 Credential、管理员令牌或 Vault 主密钥。
+- `make interop` 通过：A 的 `ReceiptVerifier.verify_result()` 接受 Go 签发的回执与 `result_envelope`，篡改后的副本被拒绝。
+- 用重新构建的镜像在 compose 里跑 `e2e`，14 项检查全部通过；AA、Broker、Mock 的日志中查不到 Credential、管理员令牌或 Vault 主密钥。
+- C 的 7 类实验在干净副本上复现 110/110（`evaluation-dashboard/results/reproductions/2026-10-21/`）。
 
 ## 快速开始
 
@@ -364,9 +365,9 @@ deploy/               docker-compose.yml、AA / Dashboard 镜像、gen-env.sh
 docs/                 设计说明、威胁与防御对照、答辩材料
 ```
 
-## 待联审与已知限制
+## 已知限制
 
-- **Credential Epoch 来源**：A 默认 `STATIC_DEMO` 仍把 epoch 写死为 17；A 已实现可选的 `BROKER_LIVE`，通过 `GET /v1/credentials/{id}/status` 获取实时 epoch。真实 A+B 生命周期联调（轮换、撤销、Status 不可用/伪造、撤销竞态）尚未完成；`seed.sh` 仍把 `github-prod` 轮换到 17 以兼容默认演示。B 执行事务内的 `ACTIVE + epoch` 检查仍是最终线性化点。
+- **Credential Epoch 来源**：A 默认 `STATIC_DEMO` 仍把 epoch 写死为 17；A 已实现可选的 `BROKER_LIVE`，通过 `GET /v1/credentials/{id}/status` 获取实时 epoch。A+B 生命周期联调（轮换、撤销、Status 不可用/伪造、撤销竞态）已对真实进程完成；`seed.sh` 仍把 `github-prod` 轮换到 17 以兼容默认演示。B 执行事务内的 `ACTIVE + epoch` 检查仍是最终线性化点。
 - **错误码与 HTTP 状态码**：全部错误码已合并进统一错误码表 [`docs/error-codes.md`](../docs/error-codes.md)，`internal/errcode/errcode_test.go` 与 A 的 `test_error_codes_doc.py` 会在出现未登记的错误码时失败。HTTP 状态按接口映射：A 的参考验签接口返回 401，Broker 对同一错误码返回 403；Challenge 方面 Broker 细分为 5 个码，A 的参考校验器只有 `CHALLENGE_MISMATCH`。以错误码为准，C 的实验脚本无需改动。
 - **从旧版本升级**：检查点改用独立密钥后，旧数据库中由 Receipt 密钥签的检查点无法通过 `/v1/audit/verify`。开发 / 实验环境请执行一次 `reset`。
 - **DENIED 回执**：只为已验签的 Capability 签发，每次拒绝多一次 SM2 签名。实测（`go test -bench . ./internal/receipt/`，Ryzen 9 8945HX）签一张 DENIED 回执约 0.036 ms，而能拿到回执的拒绝之前至少已做过一次约 0.049 ms 的 Capability 验签；C 测得单并发 ALLOW 路径 P50 约 4.7 ms。开销不到 1%，因此保持始终签发。

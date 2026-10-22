@@ -1,6 +1,6 @@
 # Credential Broker
 
-更新时间：2026-10-22（Asia/Shanghai）。完整度：**92%**。
+更新时间：2026-10-21（Asia/Shanghai）。完整度：**98%**。
 
 ## 已完成
 
@@ -34,23 +34,23 @@
 | Broker 公钥记录 | `GET /v1/broker/key-registry` | 以 A 的 `KeyRegistryDocument` 格式公布 PEM SPKI 公钥（解决之前 `04‖X‖Y` 与 PEM 不一致的问题） |
 | 错误码 / HTTP 状态 | `internal/errcode` | 协议码沿用 A；B 扩展生命周期 / 重放 / 上游码；映射表见 `credential-broker/README.md` |
 
-## 阶段三：A + B 联调（B 侧完成，待生命周期真实联调）
+## 阶段三：A + B 联调（完成）
 
 `scripts/e2e-demo.py` 通过真实 HTTP 跑通 Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit，覆盖重放、幂等、篡改请求、篡改 Capability、被窃取 Capability、伪造 Challenge、提示注入、旧 Epoch，并核对上游调用次数和审计链。
 
-A 已实现可选的 `BROKER_LIVE`：签发前读取 `GET /v1/credentials/{id}/status` 的当前 `ACTIVE` epoch。2026-10-21 用 A 的 `scripts/e2e-lifecycle.py` 对真实 Broker + Mock 进程完成生命周期联调，HTTP 与 HTTPS 各 13/13（ACTIVE、签发与执行之间轮换、撤销、Status 不可用）。B 已支持 mTLS（`BROKER_TLS_CLIENT_CA_FILE`）；A 的 Status 查询已能出示客户端证书（B 协助修改，待 A 复核），对真实 B 的 mTLS 模式已验证。B 执行事务内的 `ACTIVE + epoch` 原子检查仍是最终线性化点。
+A 的 `BROKER_LIVE` 签发前读取 `GET /v1/credentials/{id}/status` 的当前 `ACTIVE` epoch。2026-10-21 用 `scripts/e2e-lifecycle.py` 对真实 Broker + Mock 进程联调 25/25：签发与执行之间轮换、伪造 Status（未来 / 过期 epoch、撤销后仍称 ACTIVE）在执行时被拒、撤销后 AA 拒绝签发、Status 不可用、撤销竞态 50 轮可线性化（35 轮先执行、15 轮先撤销）、审计条目与 A 的 `canonical_json` 一致。HTTPS 与 Broker↔Mock mTLS 下同样通过；A 出示客户端证书的 mTLS 模式已验证。B 执行事务内的 `ACTIVE + epoch` 原子检查仍是最终线性化点。
 
-同日补齐的 B 侧项：启动时把崩溃遗留的 `CONSUMING` 改为 `FAILED`；`SIGHUP` 热加载 AA / Agent 公钥表；HTTPS / mTLS 监听。
+同日补齐的 B 侧项：崩溃遗留 `CONSUMING` 的启动恢复；AA / Agent 公钥表 `SIGHUP` 热加载；Broker Receipt 公钥轮换与吊销发布（`BROKER_RETIRED_KEYS`）；Broker HTTPS / mTLS；Broker↔Mock mTLS；审计条目 `ZTCANON-JSON-v1`；DENIED 回执开销实测（约 0.036 ms，保持始终签发）。
 
 ## 阶段四：面向 C 的支撑（完成，待 C 确认）
 
 Capability 状态查询、审计复核接口、状态重置（`BROKER_ENABLE_RESET`）、`scripts/seed.sh`（含批量 Credential）与 `scripts/reset.sh`，以及 `deploy/docker-compose.yml`（AA + Broker + Mock + 可选 Dashboard + e2e / reset 任务）。
 
-### 尚待联审
+### 已固化（待 A/C 复核）
 
-- `result_envelope` 结构与 Receipt 返回方式（B 的提案见 `credential-broker/README.md`），需写入 `shared/`。
-- 统一错误码表：A 的 `CREDENTIAL_STATUS_*` 与 B 的 `CREDENTIAL_EPOCH_MISMATCH` / `CREDENTIAL_INACTIVE` 尚未合并成一张表。
-- A 复核 B 代改的 mTLS 客户端证书支持；默认 `STATIC_DEMO` 仍把 `github-prod` 对齐到 17。
+- `result_envelope`：`shared/schemas/result-envelope.schema.json` + `shared/test-vectors/result-envelope-v1.json`，Go 与 Python 逐字节一致；规则见 `shared/README.md`。
+- 统一错误码表：`docs/error-codes.md`，A/B 两侧测试保证返回的每个码都已登记。
+- A 的 mTLS 客户端证书支持（B 代改）。默认 `STATIC_DEMO` 仍把 `github-prod` 对齐到 17。
 
 ## 阶段五：竞赛化（文档完成）
 

@@ -30,11 +30,11 @@
 
 ## 待办
 
-1. 干净环境全量复现 7 类实验；
-2. 补齐证据元数据与答辩材料；
+1. ~~干净环境全量复现 7 类实验~~：2026-10-21 由 B 在 `git archive` 导出的干净副本上复现，110/110，元数据见 `evaluation-dashboard/results/reproductions/2026-10-21/README.md`；答辩前仍建议在目标机器上再跑一次；
+2. 答辩材料；`revocation.csv` 没有覆盖“执行先赢”的分支，可在撤销前加入随机抖动（参考 `scripts/e2e-lifecycle.py`）；
 3. 确认 Dashboard 展示口径和截图；
 4. 确认 `requirements.txt`、端口和 `start_all_services.sh` 在目标机器可用；
-5. 与 A/B 对齐 `result_envelope` 和错误码字段在 CSV 中的映射。
+5. `result_envelope` 与统一错误码表已固化（`shared/README.md`、`docs/error-codes.md`）；CSV 的 `error_code` 直接取 `decision.code`，无需改动。
 
 ## 相关文档
 

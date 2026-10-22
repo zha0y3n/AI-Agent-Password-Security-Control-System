@@ -51,7 +51,7 @@ B 可以在不泄露细节的前提下统一返回拒绝，但内部至少应完
 
 任一步失败都不得读取 Credential 明文或产生业务副作用。
 
-## Credential 生命周期状态查询（A 已实现；B 已实现端点，待真实联调）
+## Credential 生命周期状态查询（A、B 已实现，2026-10-21 完成真实联调）
 
 为避免 AA 使用固定的 `credential_epoch`，A 可在签发前调用 AA 配置中、由可信 `audience` 静态映射出的 Broker 接口：
 
@@ -80,12 +80,12 @@ Accept: application/json
 ## 仍需 A/B 联审的接口
 
 - Broker Challenge API、存活时间、原子消费和错误码；
-- Credential Status 查询的传输身份（推荐 mTLS/SPIFFE）、缓存上限、可用性目标和上述 lifecycle 错误码；
-- Issuer/Agent/Broker 公钥轮换与旧公钥验证窗口；
+- Credential Status 查询的缓存上限与可用性目标（传输身份已支持 mTLS；lifecycle 错误码见 `docs/error-codes.md`）；
+- Issuer/Agent 公钥轮换的旧公钥验证窗口（Broker 侧已支持 `SIGHUP` 热加载；Broker Receipt 公钥轮换见 `credential-broker/README.md`）；
 - Clock skew 上限及可信时钟来源；
-- Capability CAS、故障恢复、幂等冲突和外部 API 成功但状态未落盘的语义；
+- ~~Capability CAS、故障恢复、幂等冲突和外部 API 成功但状态未落盘的语义~~：见 `credential-broker/docs/architecture.md` §5（启动时转 `FAILED`，不重试）；
 - ~~业务 `result_envelope` schema 与 result hash~~：已固化，见 `shared/README.md`；
-- 是否需要 mTLS/SPIFFE 等传输身份；这不替代对象签名。
+- 传输身份：Broker 与 A 的 Status 查询已支持 mTLS；SPIFFE 未做。mTLS 不替代对象签名。
 
 ## 稳定错误码（A 已使用）
 
