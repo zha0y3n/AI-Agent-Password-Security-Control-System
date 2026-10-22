@@ -22,6 +22,7 @@ pip install -i https://mirrors.aliyun.com/pypi/simple/ -r evaluation-dashboard/r
 pip install -i https://mirrors.aliyun.com/pypi/simple/ -e './agent-aa[dev]'
 
 echo "=== 2. 初始化 A 的运行时环境 ==="
+rm -rf .runtime # 强制每次重新生成，防止任务过期
 if [ ! -d ".runtime" ]; then
     agent-aa init-demo --directory .runtime
 fi
