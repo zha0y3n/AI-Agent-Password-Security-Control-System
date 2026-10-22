@@ -40,29 +40,67 @@
 | `HOLDER_BINDING_MISMATCH` | 401 | Holder Proof 的 Capability/请求/Agent 绑定不一致 |
 | `PROOF_NOT_YET_VALID` / `PROOF_EXPIRED` | 401 | Holder Proof 时间窗错误 |
 
-## B：Broker 执行阶段
+## A：Receipt 复核
+
+| 错误码 | 含义 |
+|---|---|
+| `BROKER_MISMATCH` | Receipt 的 `broker_id` 不是预期的 Broker |
+| `RESULT_BINDING_MISMATCH` | `result_envelope` 的 SM3 与 `result_hash` 不符，或 `capability_id` / `request_hash` / `outcome` 与 Receipt 不一致 |
+
+签名与公钥类复核失败沿用上表的 `INVALID_SIGNATURE`、`UNKNOWN_KEY` 等。
+
+## B：Broker 执行阶段（`POST /v1/execute`）
+
+| 错误码 | HTTP | 步骤 | 含义 |
+|---|---:|---|---|
+| `CANONICALIZATION_ERROR` / `SCHEMA_VALIDATION_FAILED` | 400 | schema | Execution Bundle 解析失败 |
+| `INVALID_SIGNATURE` / `INVALID_SIGNATURE_ENCODING` / `SIGNATURE_KEY_MISMATCH` | 403 | capability_signature / holder_proof | Capability 或 Holder Proof 验签失败 |
+| `UNTRUSTED_ISSUER` / `UNKNOWN_KEY` / `KEY_REVOKED` / `KEY_OUTSIDE_VALIDITY` / `WRONG_KEY_PURPOSE` / `KEY_SUBJECT_MISMATCH` | 403 | capability_signature / holder_proof | issuer 或公钥不可信 |
+| `CAPABILITY_NOT_YET_VALID` / `CAPABILITY_EXPIRED` | 403 | capability_validity | Capability 时间窗错误 |
+| `AUDIENCE_MISMATCH` | 403 | capability_validity / holder_proof | audience 不是本 Broker |
+| `REQUEST_BINDING_MISMATCH` / `REQUEST_HASH_MISMATCH` | 403 | request_binding | 请求字段或 SM3 摘要与 Capability 不一致 |
+| `HOLDER_BINDING_MISMATCH` / `PROOF_NOT_YET_VALID` / `PROOF_EXPIRED` | 403 | holder_proof | Holder Proof 绑定或时间窗错误 |
+| `UNSUPPORTED_OPERATION` | 403 | execution_plan | 请求无法精确映射为受支持的上游调用 |
+| `CHALLENGE_UNKNOWN` / `CHALLENGE_USED` / `CHALLENGE_EXPIRED` / `CHALLENGE_WRONG_AGENT` / `CHALLENGE_WRONG_AUDIENCE` | 403 | challenge | Broker Challenge 不存在 / 已用 / 过期 / 属于其他 Agent / 属于其他 Broker |
+| `CREDENTIAL_NOT_FOUND` | 403 | atomic_consume | Credential 不存在 |
+| `CREDENTIAL_INACTIVE` | 403 | atomic_consume | 执行时 Credential 不是 `ACTIVE` |
+| `CREDENTIAL_EPOCH_MISMATCH` | 403 | atomic_consume | Capability 的 epoch 不等于 Broker 当前 epoch |
+| `CAPABILITY_ALREADY_FAILED` | 403 | atomic_consume | 该 Capability 之前执行失败（含崩溃后启动恢复），不能再次使用 |
+| `REPLAY_IN_PROGRESS` | 409 | atomic_consume | 同一 Capability 正在被另一个请求消费 |
+| `IDEMPOTENCY_CONFLICT` | 409 | atomic_consume | 同一 Capability 携带了不同的请求 |
+| `CAPABILITY_CLAIM_MISMATCH` | 409 | atomic_consume | 同一 Capability 携带了不同的 Credential ID / epoch / nonce |
+| `CAPABILITY_NONCE_REUSED` | 409 | atomic_consume | 该 nonce 已属于另一个 Capability |
+| `CREDENTIAL_UNAVAILABLE` | 403 | credential_decrypt | 消费后 Credential 已变化或无法解密；Capability → `FAILED` |
+| `UPSTREAM_REJECTED` | 200 | upstream | 上游返回 3xx/4xx；Receipt `outcome=ERROR`，Capability → `CONSUMED` |
+| `UPSTREAM_ERROR` | 502 | upstream | 上游不可达或 5xx；Capability → `FAILED` |
+| `EXECUTION_DISABLED` | 503 | — | Broker 未配置可信 issuer / 公钥表 |
+| `INTERNAL_ERROR` | 500 | — | 内部故障；拒绝仍然失败关闭。也记录在启动恢复的 Capability 上 |
+
+## B：管理与查询接口
 
 | 错误码 | HTTP | 含义 |
 |---|---:|---|
-| `CANONICALIZATION_ERROR` / `SCHEMA_VALIDATION_FAILED` | 400 | Execution Bundle 解析失败 |
-| `INVALID_SIGNATURE` / `INVALID_SIGNATURE_ENCODING` | 403 | Capability 或 Holder Proof 验签失败 |
-| `UNTRUSTED_ISSUER` / `UNKNOWN_KEY` / `KEY_REVOKED` / `KEY_OUTSIDE_VALIDITY` | 403 | 公钥/issuer 不可信 |
-| `CAPABILITY_EXPIRED` / `CAPABILITY_NOT_YET_VALID` | 403 | Capability 时间窗错误 |
-| `AUDIENCE_MISMATCH` | 403 | audience 不匹配 |
-| `REQUEST_BINDING_MISMATCH` / `REQUEST_HASH_MISMATCH` | 403 | 请求绑定/摘要不一致 |
-| `HOLDER_BINDING_MISMATCH` / `PROOF_EXPIRED` | 403 | Holder Proof 绑定/时间错误 |
-| `CHALLENGE_UNKNOWN` / `CHALLENGE_USED` / `CHALLENGE_EXPIRED` / `CHALLENGE_WRONG_AGENT` / `CHALLENGE_WRONG_AUDIENCE` | 403 | Challenge 校验失败 |
-| `CREDENTIAL_NOT_FOUND` | 403 | Credential 不存在 |
-| `CREDENTIAL_INACTIVE` | 403 | 执行时 Credential 不是 `ACTIVE` |
-| `CREDENTIAL_EPOCH_MISMATCH` | 403 | Capability 的 epoch 落后于 Broker 当前 epoch |
-| `CREDENTIAL_UNAVAILABLE` | 403 | 消费后 Credential 已变化/无法解密 |
-| `CAPABILITY_ALREADY_FAILED` | 403 | 该 Capability 之前执行失败，不能再次使用 |
-| `REPLAY_IN_PROGRESS` | 409 | 同一 Capability 正在被另一个请求消费 |
-| `IDEMPOTENCY_CONFLICT` / `CAPABILITY_CLAIM_MISMATCH` | 409 | 同一 Capability 携带不同请求/声明 |
-| `UPSTREAM_REJECTED` | 200 | 上游返回 3xx/4xx，Receipt `outcome=ERROR` |
-| `UPSTREAM_ERROR` | 502 | 上游不可达或 5xx，Capability 标记 `FAILED` |
-| `EXECUTION_DISABLED` | 503 | Broker 未配置可信 issuer/key registry |
-| `INTERNAL_ERROR` | 500 | 内部故障；拒绝仍然失败关闭 |
+| `BAD_REQUEST` | 400 | 请求体或参数非法 |
+| `UNAUTHORIZED` | 401 | 缺少或错误的管理员令牌 |
+| `NOT_FOUND` | 404 | Capability 从未被本 Broker 消费过 |
+| `CREDENTIAL_NOT_FOUND` | 404 | Credential 不存在（执行阶段同一码返回 403） |
+| `CONFLICT` | 409 | Credential 已存在 |
+| `INVALID_STATE_TRANSITION` | 409 | 生命周期操作在当前状态下不允许（如对已销毁的 Credential 轮换） |
+| `RESET_DISABLED` | 403 | 未开启 `BROKER_ENABLE_RESET` |
+
+## 加载与配置错误（启动时失败关闭，不作为请求拒绝返回）
+
+| 错误码 | 位置 | 含义 |
+|---|---|---|
+| `DUPLICATE_KEY_ID` | A / B 公钥表 | 公钥表中出现重复 `key_id`，整张表拒绝加载 |
+| `INVALID_PUBLIC_KEY` / `INVALID_PRIVATE_KEY` | A | PEM 无法解析或不在 SM2 曲线上 |
+| `INVALID_DOMAIN` | A | 签名域分离的 purpose 非 ASCII、为空或含 NUL（编程错误） |
+
+## A 与 B 的对照
+
+- **错误码是契约，HTTP 状态只是各接口的传输映射。** A 的参考验签接口（`/v1/capabilities/verify`）对签名/绑定失败返回 401；Broker 的 `/v1/execute` 对同一错误码返回 403。两者错误码相同，C 的 CSV 以错误码为准。
+- **Challenge**：A 的参考校验器只比对“Holder Proof 中的 Challenge 是否等于调用方给定的值”，失败为 `CHALLENGE_MISMATCH`。Broker 自己签发和登记 Challenge，所以能细分为 `CHALLENGE_UNKNOWN` / `USED` / `EXPIRED` / `WRONG_AGENT` / `WRONG_AUDIENCE`。`CHALLENGE_MISMATCH` 不会出现在 Broker 的响应里。
+- **`CREDENTIAL_INACTIVE`** 两边都用：A 在签发前由 Status 判定，B 在执行事务内判定，语义相同（Credential 不是 `ACTIVE`）。
 
 ## 生命周期边界
 

@@ -347,7 +347,7 @@ docs/                 设计说明、威胁与防御对照、答辩材料
 ## 待联审与已知限制
 
 - **Credential Epoch 来源**：A 默认 `STATIC_DEMO` 仍把 epoch 写死为 17；A 已实现可选的 `BROKER_LIVE`，通过 `GET /v1/credentials/{id}/status` 获取实时 epoch。真实 A+B 生命周期联调（轮换、撤销、Status 不可用/伪造、撤销竞态）尚未完成；`seed.sh` 仍把 `github-prod` 轮换到 17 以兼容默认演示。B 执行事务内的 `ACTIVE + epoch` 检查仍是最终线性化点。
-- **错误码与 HTTP 状态码**：A 已提交统一错误码表 [`docs/error-codes.md`](../docs/error-codes.md)，但 HTTP 状态仍有分歧（A 的 Challenge 类拒绝只有 `CHALLENGE_MISMATCH`，验签失败返回 401；Broker 细分为 5 个 Challenge 码，并统一返回 403）。C 的实验脚本依赖 Broker 现有的码，因此暂不改动，等 A/B/C 联审。
+- **错误码与 HTTP 状态码**：全部错误码已合并进统一错误码表 [`docs/error-codes.md`](../docs/error-codes.md)，`internal/errcode/errcode_test.go` 与 A 的 `test_error_codes_doc.py` 会在出现未登记的错误码时失败。HTTP 状态按接口映射：A 的参考验签接口返回 401，Broker 对同一错误码返回 403；Challenge 方面 Broker 细分为 5 个码，A 的参考校验器只有 `CHALLENGE_MISMATCH`。以错误码为准，C 的实验脚本无需改动。
 - **从旧版本升级**：检查点改用独立密钥后，旧数据库中由 Receipt 密钥签的检查点无法通过 `/v1/audit/verify`。开发 / 实验环境请执行一次 `reset`。
 - **DENIED 回执**：只为已验签的 Capability 签发，每次拒绝都要做一次 SM2 签名。如果 C 的压测发现这部分开销明显，可以改为按需签发。
 - **外部 API 成功但状态未落盘**：上游已执行而 Broker 写库前崩溃时，Capability 会停在 `CONSUMING`。重启时 Broker 把它们改为 `FAILED`，之后的提交返回 `CAPABILITY_ALREADY_FAILED`，不会重复执行；Agent 需要重新申请 Capability（新 Capability 的幂等键不同，上游无法去重）。恢复只在启动时进行，前提是同一数据库只有一个 Broker 进程。
