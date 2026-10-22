@@ -67,12 +67,14 @@ def run_round(n_threads, round_id, agent):
     success_count = sum(1 for code, body in results if code == 200)
     replay_count = sum(1 for code, body in results if code == 403 and body.get("decision", {}).get("code") == "CHALLENGE_USED")
     other_count = n_threads - success_count - replay_count
+    # Broker 响应中的权威字段：解密了 Credential 的请求数
+    loaded_count = sum(1 for code, body in results if body.get("credential_loaded") is True)
 
     _, after = http("GET", f"{BASE_MOCK}/stats")
     calls_after = after["calls"].get("git", 0)
     side_effects = calls_after - calls_before
 
-    passed = (success_count == 1) and (side_effects == 1)
+    passed = (success_count == 1) and (side_effects == 1) and (loaded_count == 1)
 
     return {
         "concurrency": n_threads,
@@ -85,7 +87,7 @@ def run_round(n_threads, round_id, agent):
         "replay_reject_count": replay_count,
         "other_count": other_count,
         "error_code": "CHALLENGE_USED" if replay_count > 0 else "",
-        "credential_accessed": success_count > 0,
+        "credential_accessed": loaded_count > 0,
         "side_effect_count": side_effects,
         "duration_s": round(duration, 3),
         "passed": passed,

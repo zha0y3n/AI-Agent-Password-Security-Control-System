@@ -98,14 +98,16 @@ def run_round(round_id, agent, scenario, expected_dec):
     ex_code, ex_body = results.get("execute", (0, {}))
     ex_decision = ex_body.get("decision", {}).get("allowed", False)
     ex_error = ex_body.get("decision", {}).get("code") or ex_body.get("error", {}).get("code")
+    # Broker 响应中的权威字段：本次执行是否从 Vault 解密了 Credential
+    cred_loaded = ex_body.get("credential_loaded") is True
     revoke_http = results.get("revoke", (0, {}))[0]
 
     safe = True
     if ex_code == 200 and ex_decision:
-        safe = (side_effects == 1)
+        safe = (side_effects == 1) and cred_loaded
         actual_dec = "ALLOW"
     else:
-        safe = (side_effects == 0)
+        safe = (side_effects == 0) and not cred_loaded
         actual_dec = "DENY"
 
     # 【关键修复】只要系统是安全的（safe=True），就判定为 PASS。
@@ -121,7 +123,7 @@ def run_round(round_id, agent, scenario, expected_dec):
         "expected_decision": final_expected,
         "actual_decision": actual_dec,
         "error_code": ex_error or "",
-        "credential_accessed": side_effects > 0,
+        "credential_accessed": cred_loaded,
         "side_effect_count": side_effects,
         "execute_http": ex_code,
         "revoke_http": revoke_http,

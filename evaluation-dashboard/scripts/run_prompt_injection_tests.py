@@ -23,7 +23,7 @@ def main():
 
     rows = []
     
-    def add_row(case_id, desc, passed, error_code, detail="", side_effect_count=0):
+    def add_row(case_id, desc, passed, error_code, detail="", side_effect_count=0, credential_accessed=False):
         rows.append({
             "case_id": case_id,
             "category": "prompt_injection",
@@ -31,7 +31,7 @@ def main():
             "expected_decision": "DENY",
             "actual_decision": "DENY" if passed else "ALLOW",
             "error_code": error_code or "",
-            "credential_accessed": False,
+            "credential_accessed": credential_accessed,
             "side_effect_count": side_effect_count,
             "passed": passed,
             "detail": detail,
@@ -63,7 +63,9 @@ def main():
     r = requests.post(f"{BASE_BROKER}/v1/execute", data=raw, headers={"Content-Type": "application/json"})
     res = r.json()
     err = res.get("decision", {}).get("code") or res.get("error", {}).get("code")
-    add_row("broker_refuse_tamper", "Broker拒绝篡改请求", r.status_code == 403 and err == "REQUEST_HASH_MISMATCH", err)
+    loaded = res.get("credential_loaded") is True
+    any_loaded = loaded
+    add_row("broker_refuse_tamper", "Broker拒绝篡改请求", r.status_code == 403 and err == "REQUEST_HASH_MISMATCH" and not loaded, err, credential_accessed=loaded)
 
     # Case 3: Broker 拒绝伪造 Capability (把 read 改 write)
     forged_cap = cap.model_copy(update={"body": cap.body.model_copy(update={"operation": "write_file"})})
@@ -76,12 +78,15 @@ def main():
     r = requests.post(f"{BASE_BROKER}/v1/execute", data=raw, headers={"Content-Type": "application/json"})
     res = r.json()
     err = res.get("decision", {}).get("code") or res.get("error", {}).get("code")
-    add_row("broker_refuse_forged_cap", "Broker拒绝伪造Capability", r.status_code == 403 and err == "INVALID_SIGNATURE", err)
+    loaded = res.get("credential_loaded") is True
+    any_loaded = any_loaded or loaded
+    add_row("broker_refuse_forged_cap", "Broker拒绝伪造Capability", r.status_code == 403 and err == "INVALID_SIGNATURE" and not loaded, err, credential_accessed=loaded)
 
     # 验证副作用为 0
     _, after = http("GET", f"{BASE_MOCK}/stats")
     side_effects = after["calls"].get("git", 0) - before["calls"].get("git", 0)
-    add_row("zero_side_effects", "所有注入均未产生副作用", side_effects == 0, "", f"side_effects={side_effects}")
+    add_row("zero_side_effects", "所有注入均未产生副作用", side_effects == 0 and not any_loaded, "", f"side_effects={side_effects}",
+            side_effect_count=side_effects, credential_accessed=any_loaded)
 
     with open("evaluation-dashboard/results/prompt_injection.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=rows[0].keys())

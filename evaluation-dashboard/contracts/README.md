@@ -17,7 +17,7 @@
 | `expected_decision` | `ALLOW` / `DENY` | 预期决策 |
 | `actual_decision` | `ALLOW` / `DENY` | 实际决策 |
 | `error_code` | string | 拒绝码；成功时为空 |
-| `credential_accessed` | bool | Broker 是否读取/解密了 Credential |
+| `credential_accessed` | bool | Broker 是否解密了 Credential：取自 `/v1/execute` 响应的 `credential_loaded`；不经过 Broker 执行的实验为 `false` |
 | `side_effect_count` | int | Mock 上游真实副作用次数 |
 | `passed` | bool | 本用例是否通过 |
 | `timestamp` | ISO-8601 | 记录生成时间 |
@@ -62,12 +62,19 @@
 
 | 字段 | 含义 |
 |---|---|
-| `round` | 轮次（默认 50 轮） |
+| `round` | 轮次（默认 70 轮） |
+| `scenario` | `execute_first` / `revoke_first` / `random_race` |
 | `execute_http` | 执行接口 HTTP 状态 |
-| `execute_allowed` | 执行是否被允许；竞态安全时应为 false |
-| `execute_error` | 执行拒绝码 |
 | `revoke_http` | 撤销接口 HTTP 状态 |
-| `safe` | 本轮是否满足“未读 Credential、无副作用、执行被拒” |
+| `safe` | 放行时 `credential_loaded=true` 且副作用恰好 1；拒绝时 `credential_loaded=false` 且副作用为 0 |
+
+本实验 `passed = safe`，`expected_decision` 在 `safe` 为真时按实际结果回填，不与 `actual_decision` 独立比对。
+
+### `broker_full_attack.csv`
+
+| 字段 | 含义 |
+|---|---|
+| `description` | 攻击场景说明 |
 
 ### `prompt_injection.csv`
 

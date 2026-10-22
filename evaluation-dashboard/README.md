@@ -5,9 +5,9 @@
 ## 目录
 
 ```text
-scripts/            7 类实验脚本 + 一键启动脚本
+scripts/            8 类实验脚本 + 一键启动脚本
 tests/              pytest 基础用例（AA 签发接口）
-dashboard/          Streamlit Dashboard（读取 results/ 下的 7 份 CSV）
+dashboard/          Streamlit Dashboard（读取 results/ 下的 8 份 CSV）
 contracts/          CSV 字段与跨模块数据约定
 results/            实验结果 CSV；reproductions/ 下为带环境元数据的复现记录
 requirements.txt    Python 依赖
@@ -22,8 +22,11 @@ requirements.txt    Python 依赖
 | Credential 生命周期 | `run_credential_lifecycle_tests.py` | `credential_lifecycle.csv` | 创建、重复创建、无令牌创建、查询、轮换、撤销、重复撤销、查询不存在、审计记录（9 条） | 状态码与错误码符合预期 |
 | 并发重放 | `run_concurrency_tests.py` | `concurrency.csv` | 同一 Capability 并发提交 10/50/100/200/500 次，各 3 轮 | 每轮恰好 1 次成功，真实副作用 ≤ 1 |
 | 性能 | `run_performance_tests.py` | `performance.csv` | 并发 1/10/50/100，每轮 100 个独立 Capability，各 3 轮 | 全部执行成功；记录吞吐与 P50/P95/P99 |
-| 撤销竞态 | `run_revocation_tests.py` | `revocation.csv` | 执行与撤销并发，50 轮 | 每轮 `safe`：未读取 Credential、无副作用、执行被拒 |
-| 提示注入 | `run_prompt_injection_tests.py` | `prompt_injection.csv` | 任务外资源、签发后篡改请求、伪造 Capability | 全部被拦截，副作用为 0 |
+| 撤销竞态 | `run_revocation_tests.py` | `revocation.csv` | 执行与撤销并发：`execute_first` 25 轮、`revoke_first` 25 轮、`random_race` 20 轮（两侧各随机延迟 0～2 ms） | 每轮 `safe`，见下文“撤销竞态的判定” |
+| 提示注入 | `run_prompt_injection_tests.py` | `prompt_injection.csv` | 任务外资源、签发后篡改请求、伪造 Capability | 全部被拦截，未读取 Credential，副作用为 0 |
+| Broker 全链路攻击 | `run_broker_full_attack_tests.py` | `broker_full_attack.csv` | 正常请求、顺序重放、偷票（攻击者私钥签 Holder Proof）、跨资源、跨任务、篡改请求路径、旧 Epoch（7 条） | 正常请求执行 1 次；攻击全部以预期错误码被拒，未读取 Credential，副作用为 0 |
+
+`credential_accessed` 一律取自 Broker `POST /v1/execute` 响应中的权威字段 `credential_loaded`（本次执行是否从 Vault 解密了 Credential）；不经过 Broker 执行的实验（AA 签发、AA 验签、生命周期管理接口）记为 `False`。`side_effect_count` 取自 Mock 上游 `GET /stats` 的调用计数差。
 
 性能实验的时延只统计 `POST /v1/execute`（含 Broker 全部校验、原子消费、SM4 解密、上游调用、回执签名与审计写入）；吞吐按整轮墙钟时间计算，包含 AA 签发与 Holder Proof 生成。
 
@@ -50,6 +53,7 @@ python evaluation-dashboard/scripts/run_concurrency_tests.py
 python evaluation-dashboard/scripts/run_performance_tests.py
 python evaluation-dashboard/scripts/run_revocation_tests.py
 python evaluation-dashboard/scripts/run_prompt_injection_tests.py
+python evaluation-dashboard/scripts/run_broker_full_attack_tests.py
 ```
 
 实验会覆盖 `results/` 下的同名 CSV。管理令牌从环境变量 `BROKER_ADMIN_TOKEN` 或 `credential-broker/.env` 读取。
@@ -61,7 +65,7 @@ streamlit run evaluation-dashboard/dashboard/app.py --server.address 0.0.0.0
 # http://localhost:8501
 ```
 
-Dashboard 读取 `results/` 下的 7 份 CSV，分为 issue 测试、verify 测试、凭据生命周期、并发测试、性能测试、撤销竞态、提示注入 7 个 Tab，展示通过率与明细。
+Dashboard 读取 `results/` 下的 8 份 CSV，分为 issue 测试、verify 测试、凭据生命周期、并发测试、性能测试、撤销竞态、提示注入、Broker 全链路 8 个 Tab，展示通过率与明细。
 
 也可以通过 Docker Compose 启动：`cd credential-broker/deploy && docker compose --profile dashboard up -d dashboard`。
 
@@ -77,6 +81,17 @@ Dashboard 读取 `results/` 下的 7 份 CSV，分为 issue 测试、verify 测�
 
 并发、性能、撤销实验另有 `concurrency`、`throughput_rps`、`p50_ms/p95_ms/p99_ms`、`safe` 等字段。完整定义见 [contracts/README.md](contracts/README.md)。
 
+## 撤销竞态的判定
+
+执行与撤销谁先完成取决于线程调度，脚本不断言先后顺序，只断言安全性 `safe`：
+
+- 执行被放行：`credential_loaded=true` 且上游副作用恰好 1 次；
+- 执行被拒绝：`credential_loaded=false` 且上游副作用为 0。
+
+`passed` 等于 `safe`。`expected_decision` 在 `safe` 为真时**按实际结果回填**（`final_expected = actual_dec if safe else expected_dec`），因此本实验的 `expected_decision` 与 `actual_decision` 不是独立比对，不能表述为“预期与实际完全一致”；场景本身的意图见 `scenario` 列。
+
+`execute_first` 场景中撤销比执行晚 70 ms 以上，实际是顺序操作；真正的并发竞态是 `random_race`。本实验不核对执行与撤销在 Broker 内的先后顺序；该线性化性质由 `scripts/e2e-lifecycle.py` 通过审计链序号验证。
+
 ## 复现记录
 
 复现时应记录硬件、操作系统、Go/Python 版本、启动顺序与 CSV 生成时间，并与原结果分目录存放。示例见 [results/reproductions/2026-10-21/README.md](results/reproductions/2026-10-21/README.md)。性能数据与硬件相关，不同机器之间不宜直接比较绝对值。
@@ -91,7 +106,3 @@ Dashboard 读取 `results/` 下的 7 份 CSV，分为 issue 测试、verify 测�
 - [contracts/README.md](contracts/README.md)：CSV 字段定义
 - [../docs/threat-model.md](../docs/threat-model.md)：威胁模型
 - [../credential-broker/README.md](../credential-broker/README.md#实验支撑接口)：Broker 的实验支撑接口
-
-## ⚠️ 关于撤销竞态测试的预期断言
-在 `run_revocation_tests.py` 中，由于 OS 线程调度和网络延迟的不可预测性，我们**不强制断言谁（执行或撤销）先到达终点**。
-我们的核心安全断言是 `safe`（即：如果执行成功，底层副作用必须严格等于 1；如果执行被拒，副作用必须严格等于 0）。`expected_decision` 字段记录的是当前测试场景（如强制执行先赢）的理论预期，而 `actual_decision` 是实际发生的线性化顺序。只要 `safe` 为真，即证明系统在并发下未发生数据错乱。

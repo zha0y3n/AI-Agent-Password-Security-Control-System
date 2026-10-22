@@ -15,6 +15,7 @@ from e2e_demo_lib import Agent, http, SignedCapability
 BROKER_DIR = Path(__file__).resolve().parent.parent.parent / "credential-broker"
 
 BASE_BROKER = "http://127.0.0.1:8080"
+BASE_MOCK = "http://127.0.0.1:9090"
 RUNTIME_DIR = BROKER_DIR.parent / ".runtime"
 
 CONCURRENCY_LEVELS = [1, 10, 50, 100]
@@ -23,8 +24,11 @@ REQUESTS_PER_ROUND = 100
 
 def run_round(n_threads, round_id, agent):
     http("POST", f"{BASE_BROKER}/v1/admin/reset")
-    
+    _, before = http("GET", f"{BASE_MOCK}/stats")
+    calls_before = before["calls"].get("git", 0)
+
     latencies = []
+    allowed = []  # 每个请求：Broker 是否放行且解密了 Credential（取自响应的权威字段）
     lock = threading.Lock()
     
     def worker():
@@ -45,10 +49,14 @@ def run_round(n_threads, round_id, agent):
         
         t0 = time.perf_counter()
         try:
-            requests.post(f"{BASE_BROKER}/v1/execute", data=raw, headers={"Content-Type": "application/json"}, timeout=10)
+            r = requests.post(f"{BASE_BROKER}/v1/execute", data=raw, headers={"Content-Type": "application/json"}, timeout=10)
             dt = (time.perf_counter() - t0) * 1000
+            body = r.json()
+            ok = (r.status_code == 200 and body.get("decision", {}).get("allowed") is True
+                  and body.get("credential_loaded") is True)
             with lock:
                 latencies.append(dt)
+                allowed.append(ok)
         except Exception:
             pass
 
@@ -65,6 +73,9 @@ def run_round(n_threads, round_id, agent):
             t.join()
         remaining -= batch
     total_s = time.perf_counter() - t_start
+    _, after = http("GET", f"{BASE_MOCK}/stats")
+    side_effects = after["calls"].get("git", 0) - calls_before
+    allowed_count = sum(allowed)
 
     if not latencies:
         return {"concurrency": n_threads, "round": round_id, "passed": False}
@@ -88,11 +99,11 @@ def run_round(n_threads, round_id, agent):
         "p99_ms": round(p99, 2),
         "min_ms": round(min(latencies), 2),
         "max_ms": round(max(latencies), 2),
-        "actual_decision": "ALLOW",
+        "actual_decision": "ALLOW" if allowed_count == len(latencies) else "DENY",
         "error_code": "",
-        "credential_accessed": True,
-        "side_effect_count": len(latencies),
-        "passed": len(latencies) == REQUESTS_PER_ROUND,
+        "credential_accessed": allowed_count > 0,
+        "side_effect_count": side_effects,
+        "passed": allowed_count == REQUESTS_PER_ROUND and side_effects == REQUESTS_PER_ROUND,
         "timestamp": datetime.now().isoformat(timespec="seconds"),
     }
 
