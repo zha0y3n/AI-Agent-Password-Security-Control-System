@@ -104,6 +104,42 @@ func TestFailedCapabilityCannotBeReused(t *testing.T) {
 	}
 }
 
+func TestRecoverAbandonedFailsOnlyConsuming(t *testing.T) {
+	env, store := setup(t)
+	for _, id := range []string{"cap-stuck", "cap-done"} {
+		if _, err := store.Consume(ctx, claim(id)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := store.Complete(ctx, "cap-done", []byte(`{"ok":true}`)); err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := store.RecoverAbandoned(ctx, "INTERNAL_ERROR")
+	if err != nil || n != 1 {
+		t.Fatalf("recover: n=%d err=%v", n, err)
+	}
+	info, err := store.Get(ctx, "cap-stuck")
+	if err != nil || info.State != capability.StateFailed || info.ErrorCode != "INTERNAL_ERROR" {
+		t.Fatalf("stuck capability after recovery: %+v %v", info, err)
+	}
+	// 恢复后不允许再次消费：上游可能已经执行过
+	if _, err := store.Consume(ctx, claim("cap-stuck")); !errors.Is(err, capability.ErrAlreadyFailed) {
+		t.Fatalf("reuse recovered cap: %v", err)
+	}
+	// 已完成的 Capability 不受影响，仍然幂等返回旧结果
+	res, err := store.Consume(ctx, claim("cap-done"))
+	if err != nil || res.Outcome != capability.Replayed {
+		t.Fatalf("completed cap after recovery: %+v %v", res, err)
+	}
+	if auditSeq(t, env, "capability.recover", "cap_id", "cap-stuck") == 0 {
+		t.Fatal("recovery must be audited")
+	}
+	if n, err := store.RecoverAbandoned(ctx, "INTERNAL_ERROR"); err != nil || n != 0 {
+		t.Fatalf("second recovery: n=%d err=%v", n, err)
+	}
+}
+
 func TestDeniedConsumeLeavesNoState(t *testing.T) {
 	env, store := setup(t)
 	if _, err := env.Credentials.Apply(ctx, "git-prod", credential.ActionDisable); err != nil {

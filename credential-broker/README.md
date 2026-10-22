@@ -26,8 +26,14 @@ Go 实现，国密原语来自 [`emmansun/gmsm`](https://github.com/emmansun/gms
 **B 约 92%。** 剩下的部分：
 
 - 等 A/C 联审：`result_envelope`、统一错误码表、C 的接口需求。
-- A 的 `BROKER_LIVE` 已实现，待与真实 B 做 TLS/mTLS 生命周期联调。
-- 可选：崩溃后停在 `CONSUMING` 的 Capability 的恢复流程。
+- A 端 mTLS 客户端证书：B 已支持 `BROKER_TLS_CLIENT_CA_FILE`，但 A 的 Status 查询还不能出示客户端证书，开启 mTLS 后 A 会按预期返回 `CREDENTIAL_STATUS_UNAVAILABLE`。
+
+2026-10-21 补齐的 B 侧项目：
+
+- **A+B 生命周期真实联调**：A 的 `scripts/e2e-lifecycle.py` 对真实 Broker + Mock 进程跑通，HTTP 与 HTTPS（A 的严格 HTTPS 模式）各 13/13：ACTIVE 签发执行、签发与执行之间轮换（旧票 `CREDENTIAL_EPOCH_MISMATCH`，未读 Credential、无副作用）、撤销后 AA 拒绝签发、Status 不可用时 AA 失败关闭。
+- **TLS / mTLS**：`BROKER_TLS_CERT_FILE` + `BROKER_TLS_KEY_FILE` 开启 HTTPS（TLS ≥ 1.2）；再设置 `BROKER_TLS_CLIENT_CA_FILE` 则强制校验客户端证书。
+- **崩溃恢复**：启动时（开始监听之前）把停在 `CONSUMING` 的 Capability 改为 `FAILED`（`error_code=INTERNAL_ERROR`，审计事件 `capability.recover`），不重试。
+- **公钥表热加载**：`kill -HUP <broker>` 重新读取 `BROKER_KEY_REGISTRY`，整体通过严格解析才替换，否则保留旧表并记录错误；成功时写审计事件 `keys.reload`。
 
 最近一次 B 代码验证是 2026-10-18，已包含 A 在 PR #5 中的修复；A 的 PR #6 只增加 A 端可选 Status 查询，不改变 B 代码：
 
@@ -287,6 +293,8 @@ sh scripts/reset.sh                   # 清空 Broker（Credential、Capability�
 | `BROKER_UPSTREAM_URL` | `http://127.0.0.1:9090` | 受保护服务地址 |
 | `BROKER_UPSTREAM_TIMEOUT` | `10s` | 上游超时 |
 | `BROKER_ENABLE_RESET` | `0` | 开放 `POST /v1/admin/reset`。**生产环境不得开启** |
+| `BROKER_TLS_CERT_FILE` / `BROKER_TLS_KEY_FILE` | 空 | 同时设置时以 HTTPS 监听（TLS ≥ 1.2）；只设一个则启动失败 |
+| `BROKER_TLS_CLIENT_CA_FILE` | 空 | 设置后要求并校验客户端证书（mTLS），需要先开启 TLS |
 | `BROKER_LOG_LEVEL` | `info` | 日志只记录方法、路径、状态码、耗时，从不记录请求体或头部 |
 | `MOCK_ADDR` / `MOCK_GIT_TOKEN` / `MOCK_DB_TOKEN` | `:9090` / 必填 / 必填 | Mock 上游期望的 Credential，必须和录入 Vault 的值一致 |
 
@@ -304,6 +312,9 @@ make interop       # 跨语言：A 的 Python 代码签发 bundle → Go 执行�
 - 三组共享向量，篡改后的版本全部失败
 - 23 类拒绝都停在预期步骤，没有读取 Credential，也没有调用上游
 - 每类拒绝的回执行为
+- 崩溃遗留的 `CONSUMING` 在启动时转为 `FAILED`，且不能再次消费
+- 公钥表热加载：吊销立即生效，非法文件不替换旧表
+- TLS / mTLS：无客户端证书或非受信 CA 签发的证书握手失败
 - 原样重放；同一 Capability 带新 Challenge 时幂等返回同一回执
 - 20 路并发重放写操作，副作用恰好一次
 - 上游 4xx / 不可达
@@ -340,8 +351,9 @@ docs/                 设计说明、威胁与防御对照、答辩材料
 - **从旧版本升级**：检查点改用独立密钥后，旧数据库中由 Receipt 密钥签的检查点无法通过 `/v1/audit/verify`。开发 / 实验环境请执行一次 `reset`。
 - **`result_envelope` 结构与 Receipt 返回方式**：Receipt 目前随 `/v1/execute` 响应一起返回，并在幂等重放时原样再返回。两者都是 B 的提案，A/C 联审后需写入 `shared/schemas/` 和 `docs/crypto-protocol.md` §6。在此之前不要改动 `shared/`。
 - **DENIED 回执**：只为已验签的 Capability 签发，每次拒绝都要做一次 SM2 签名。如果 C 的压测发现这部分开销明显，可以改为按需签发。
-- **外部 API 成功但状态未落盘**：上游已执行而 Broker 写库前崩溃时，Capability 会停在 `CONSUMING`，之后的提交一律返回 `REPLAY_IN_PROGRESS`。这是 fail closed，但目前还没有恢复流程。
-- **公钥轮换**：Broker、AA、Agent 的公钥表都在启动时加载，更换公钥需要重启 Broker。`/v1/broker/key-registry` 只发布当前密钥，无法把泄露的旧 Broker 密钥标记为 `REVOKED`，只能换用新的 `BROKER_KEY_ID` 并通知验证方。
+- **外部 API 成功但状态未落盘**：上游已执行而 Broker 写库前崩溃时，Capability 会停在 `CONSUMING`。重启时 Broker 把它们改为 `FAILED`，之后的提交返回 `CAPABILITY_ALREADY_FAILED`，不会重复执行；Agent 需要重新申请 Capability（新 Capability 的幂等键不同，上游无法去重）。恢复只在启动时进行，前提是同一数据库只有一个 Broker 进程。
+- **公钥轮换**：AA / Agent 公钥表可以用 `SIGHUP` 热加载。Broker 自己的 Receipt / 检查点密钥仍在启动时加载，更换需要重启；`/v1/broker/key-registry` 只发布当前密钥，无法把泄露的旧 Broker 密钥标记为 `REVOKED`，只能换用新的 `BROKER_KEY_ID` 并通知验证方。
+- **传输层算法**：TLS 使用 Go 标准库（ECDSA / RSA 证书），不是国密 TLCP；协议层的签名与摘要仍是 SM2 / SM3。
 - **审计条目编码**：审计条目目前用 `encoding/json`（字段顺序固定），还没有改用 `ZTCANON-JSON-v1`。格式见 `docs/audit-chain.md`。
 - **`POST /v1/admin/reset`** 会清空审计链，只能用于开发和实验环境。
 - **上游网络隔离**：Demo 中 Mock 上游可以从本机直接访问。没有 Credential 只会返回 401，但生产环境需要让上游只接受来自 Broker 的连接（mTLS 或网络策略）。

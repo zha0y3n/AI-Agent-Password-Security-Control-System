@@ -190,6 +190,54 @@ func (s *Store) finish(ctx context.Context, capID string, to State, result []byt
 	})
 }
 
+// RecoverAbandoned 把所有停在 CONSUMING 的 Capability 改为 FAILED，返回处理的数量。
+//
+// 只能在 Broker 开始接受请求之前调用：那时不存在进行中的执行，CONSUMING 只可能是
+// 上一个进程在“赢得执行权”与“记录结果”之间崩溃留下的。上游可能已经执行过，
+// 因此不重试，也不允许再次消费（fail closed，SideEffectCount <= 1 保持成立）；
+// 之后同一 Capability 的提交返回 CAPABILITY_ALREADY_FAILED，Agent 需要重新申请。
+// 前提是同一数据库只有一个 Broker 进程。
+func (s *Store) RecoverAbandoned(ctx context.Context, errorCode string) (int, error) {
+	var n int
+	err := s.db.WithTx(ctx, func(tx *sql.Tx) error {
+		rows, err := tx.QueryContext(ctx, `SELECT cap_id FROM capabilities WHERE state = ? ORDER BY cap_id`, StateConsuming)
+		if err != nil {
+			return err
+		}
+		var ids []string
+		for rows.Next() {
+			var id string
+			if err := rows.Scan(&id); err != nil {
+				rows.Close()
+				return err
+			}
+			ids = append(ids, id)
+		}
+		if err := rows.Close(); err != nil {
+			return err
+		}
+		if err := rows.Err(); err != nil {
+			return err
+		}
+		now := s.now().Unix()
+		for _, id := range ids {
+			if _, err := tx.ExecContext(ctx,
+				`UPDATE capabilities SET state = ?, error_code = ?, updated_at = ? WHERE cap_id = ? AND state = ?`,
+				StateFailed, errorCode, now, id, StateConsuming); err != nil {
+				return err
+			}
+			if _, err := s.audit.Append(ctx, tx, "capability.recover", map[string]any{
+				"cap_id": id, "error_code": errorCode, "reason": "abandoned in CONSUMING by a previous broker process",
+			}); err != nil {
+				return err
+			}
+		}
+		n = len(ids)
+		return nil
+	})
+	return n, err
+}
+
 // State 返回 Capability 当前状态（不存在时返回 sql.ErrNoRows）。
 func (s *Store) State(ctx context.Context, capID string) (State, error) {
 	var st State

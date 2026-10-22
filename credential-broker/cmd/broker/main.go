@@ -18,6 +18,7 @@ import (
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/config"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/credential"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/crypto"
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/errcode"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/evidence"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/execution"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/logging"
@@ -94,12 +95,21 @@ func run() error {
 		KeyNotBefore:     notBefore,
 		KeyNotAfter:      notBefore + int64(cfg.KeyValidity/time.Second),
 	}
+	var keys *protocol.ReloadableKeyRegistry
 	if cfg.KeyRegistryPath != "" {
-		keys, err := protocol.LoadKeyRegistry(cfg.KeyRegistryPath)
+		keys, err = protocol.LoadReloadableKeyRegistry(cfg.KeyRegistryPath)
 		if err != nil {
 			return fmt.Errorf("load BROKER_KEY_REGISTRY: %w", err)
 		}
 		store := capability.NewStore(db, auditor)
+		// 还没开始监听，CONSUMING 只可能是上一个进程崩溃留下的。
+		recovered, err := store.RecoverAbandoned(context.Background(), errcode.Internal)
+		if err != nil {
+			return fmt.Errorf("recover abandoned capabilities: %w", err)
+		}
+		if recovered > 0 {
+			log.Warn("marked capabilities abandoned in CONSUMING as FAILED", "count", recovered)
+		}
 		srv.Capabilities = store
 		srv.Executor = &execution.Executor{
 			Pipeline: verifier.New(m, verifier.Steps(verifier.Config{
@@ -124,9 +134,14 @@ func run() error {
 		srv.ResetDB = db
 		log.Warn("BROKER_ENABLE_RESET is on: POST /v1/admin/reset wipes all broker state (dev / experiments only)")
 	}
+	tlsCfg, err := cfg.ServerTLS()
+	if err != nil {
+		return err
+	}
 	httpSrv := &http.Server{
 		Addr:              cfg.Addr,
 		Handler:           srv.Handler(),
+		TLSConfig:         tlsCfg,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      30 * time.Second,
@@ -136,10 +151,18 @@ func run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go purgeChallenges(ctx, challenges, cfg.ChallengeTTL, log)
+	if keys != nil {
+		go reloadKeysOnSIGHUP(ctx, keys, auditor, log)
+	}
 
 	errc := make(chan error, 1)
 	go func() {
-		log.Info("broker listening", "addr", cfg.Addr, "broker_id", cfg.BrokerID, "public_key", signer.PublicKeyHex())
+		log.Info("broker listening", "addr", cfg.Addr, "broker_id", cfg.BrokerID, "public_key", signer.PublicKeyHex(),
+			"tls", cfg.TLSEnabled(), "mtls", cfg.TLSClientCAFile != "")
+		if tlsCfg != nil {
+			errc <- httpSrv.ListenAndServeTLS("", "")
+			return
+		}
 		errc <- httpSrv.ListenAndServe()
 	}()
 	select {
@@ -177,6 +200,30 @@ func purgeChallenges(ctx context.Context, s *challenge.Service, ttl time.Duratio
 		case <-t.C:
 			if _, err := s.Purge(ctx, ttl); err != nil && ctx.Err() == nil {
 				log.Warn("purge challenges failed", "error", err.Error())
+			}
+		}
+	}
+}
+
+// reloadKeysOnSIGHUP 在收到 SIGHUP 时重新加载 AA / Agent 公钥表（例如吊销或新增公钥后）。
+// 新文件整体通过严格解析才替换；否则继续使用当前公钥表并记录错误。
+func reloadKeysOnSIGHUP(ctx context.Context, keys *protocol.ReloadableKeyRegistry, a *evidence.Auditor, log *slog.Logger) {
+	hup := make(chan os.Signal, 1)
+	signal.Notify(hup, syscall.SIGHUP)
+	defer signal.Stop(hup)
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-hup:
+			reg, err := keys.Reload()
+			if err != nil {
+				log.Error("reload BROKER_KEY_REGISTRY failed; keeping the previous key registry", "error", err.Error())
+				continue
+			}
+			log.Info("reloaded BROKER_KEY_REGISTRY", "trusted_keys", reg.Len())
+			if err := a.Record(ctx, "keys.reload", map[string]any{"trusted_keys": reg.Len()}); err != nil && ctx.Err() == nil {
+				log.Warn("audit key registry reload failed", "error", err.Error())
 			}
 		}
 	}

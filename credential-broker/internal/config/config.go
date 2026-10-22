@@ -41,6 +41,12 @@ type Config struct {
 
 	// EnableReset 开放 POST /v1/admin/reset，只用于开发 / 实验环境。
 	EnableReset bool
+
+	// 传输层：证书与私钥同时设置时 Broker 以 HTTPS 监听；再设置 TLSClientCAFile 时
+	// 要求并校验客户端证书（mTLS）。都未设置时为明文 HTTP（仅限本机 / 容器内演示）。
+	TLSCertFile     string
+	TLSKeyFile      string
+	TLSClientCAFile string
 }
 
 // Load 读取并校验配置。
@@ -58,6 +64,10 @@ func Load() (*Config, error) {
 
 		TrustedIssuer:   os.Getenv("BROKER_TRUSTED_ISSUER"),
 		KeyRegistryPath: os.Getenv("BROKER_KEY_REGISTRY"),
+
+		TLSCertFile:     os.Getenv("BROKER_TLS_CERT_FILE"),
+		TLSKeyFile:      os.Getenv("BROKER_TLS_KEY_FILE"),
+		TLSClientCAFile: os.Getenv("BROKER_TLS_CLIENT_CA_FILE"),
 	}
 	var err error
 	if c.VaultKey, err = hex.DecodeString(os.Getenv("BROKER_VAULT_KEY")); err != nil || len(c.VaultKey) != crypto.SM4KeySize {
@@ -86,6 +96,12 @@ func Load() (*Config, error) {
 	}
 	if (c.TrustedIssuer == "") != (c.KeyRegistryPath == "") {
 		return nil, fmt.Errorf("BROKER_TRUSTED_ISSUER and BROKER_KEY_REGISTRY must be set together")
+	}
+	if (c.TLSCertFile == "") != (c.TLSKeyFile == "") {
+		return nil, fmt.Errorf("BROKER_TLS_CERT_FILE and BROKER_TLS_KEY_FILE must be set together")
+	}
+	if c.TLSClientCAFile != "" && c.TLSCertFile == "" {
+		return nil, fmt.Errorf("BROKER_TLS_CLIENT_CA_FILE requires BROKER_TLS_CERT_FILE and BROKER_TLS_KEY_FILE")
 	}
 	switch v := os.Getenv("BROKER_ENABLE_RESET"); v {
 	case "", "0", "false":

@@ -16,9 +16,9 @@ const DefaultClockSkew = 5 * time.Second
 
 // Config 是协议校验步骤的依赖。全部来自 Broker 本地配置，不取自请求。
 type Config struct {
-	BrokerID      string                // 本 Broker 的 audience
-	TrustedIssuer string                // 唯一信任的 AA issuer
-	Keys          *protocol.KeyRegistry // AA / Agent 公钥
+	BrokerID      string             // 本 Broker 的 audience
+	TrustedIssuer string             // 唯一信任的 AA issuer
+	Keys          protocol.KeyLookup // AA / Agent 公钥
 	Challenges    *challenge.Service
 	ClockSkew     time.Duration
 }

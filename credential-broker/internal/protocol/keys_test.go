@@ -118,3 +118,54 @@ func TestLoadARuntimeRegistry(t *testing.T) {
 		t.Fatal("empty registry")
 	}
 }
+
+func TestReloadableKeyRegistry(t *testing.T) {
+	path := t.TempDir() + "/public-keys.json"
+	write := func(doc any) {
+		t.Helper()
+		raw, err := canonical.Marshal(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, raw, 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(registryDoc(t))
+	reg, err := protocol.LoadReloadableKeyRegistry(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, perr := reg.Lookup("aa-key-01", protocol.KeyPurposeCapability, "aa-01", 1500); perr != nil {
+		t.Fatal(perr)
+	}
+
+	// 吊销 AA 公钥后重新加载：立即生效
+	doc := registryDoc(t)
+	doc["keys"].([]any)[0].(map[string]any)["status"] = "REVOKED"
+	write(doc)
+	if _, err := reg.Reload(); err != nil {
+		t.Fatal(err)
+	}
+	if _, perr := reg.Lookup("aa-key-01", protocol.KeyPurposeCapability, "aa-01", 1500); perr == nil || perr.Code != protocol.CodeKeyRevoked {
+		t.Fatalf("revoked after reload: %v", perr)
+	}
+
+	// 非法文件：Reload 报错，当前公钥表保持不变
+	if err := os.WriteFile(path, []byte(`{"protocol_version":"1.0","keys":[{}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := reg.Reload(); err == nil {
+		t.Fatal("invalid registry must not reload")
+	}
+	if reg.Len() != 2 {
+		t.Fatalf("len after failed reload = %d", reg.Len())
+	}
+	if _, perr := reg.Lookup("aa-key-01", protocol.KeyPurposeCapability, "aa-01", 1500); perr == nil || perr.Code != protocol.CodeKeyRevoked {
+		t.Fatalf("failed reload must keep the previous registry: %v", perr)
+	}
+
+	if _, err := protocol.LoadReloadableKeyRegistry(t.TempDir() + "/missing.json"); err == nil {
+		t.Fatal("missing registry must fail at startup")
+	}
+}

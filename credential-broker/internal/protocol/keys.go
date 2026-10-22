@@ -4,6 +4,7 @@ import (
 	"crypto/ecdsa"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"unicode/utf8"
 
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/crypto"
@@ -136,3 +137,42 @@ func (r *KeyRegistry) Lookup(keyID, purpose, subjectID string, at int64) (*ecdsa
 
 // Len 返回注册表中的公钥数量。
 func (r *KeyRegistry) Len() int { return len(r.records) }
+
+// KeyLookup 是校验流水线查找可信公钥所需的接口，由 *KeyRegistry 与 *ReloadableKeyRegistry 实现。
+type KeyLookup interface {
+	Lookup(keyID, purpose, subjectID string, at int64) (*ecdsa.PublicKey, *Error)
+}
+
+// ReloadableKeyRegistry 从文件加载公钥表，并支持运行时整体替换（例如收到 SIGHUP 时）。
+// 替换是原子的：新文件必须整体通过严格解析，否则保留当前公钥表不变。
+type ReloadableKeyRegistry struct {
+	path string
+	cur  atomic.Pointer[KeyRegistry]
+}
+
+// LoadReloadableKeyRegistry 首次加载公钥表；失败时返回错误（启动 fail closed）。
+func LoadReloadableKeyRegistry(path string) (*ReloadableKeyRegistry, error) {
+	r := &ReloadableKeyRegistry{path: path}
+	if _, err := r.Reload(); err != nil {
+		return nil, err
+	}
+	return r, nil
+}
+
+// Reload 重新读取文件，成功后替换当前公钥表并返回新表；失败时当前公钥表保持不变。
+func (r *ReloadableKeyRegistry) Reload() (*KeyRegistry, error) {
+	reg, err := LoadKeyRegistry(r.path)
+	if err != nil {
+		return nil, err
+	}
+	r.cur.Store(reg)
+	return reg, nil
+}
+
+// Lookup 在当前公钥表中查找。
+func (r *ReloadableKeyRegistry) Lookup(keyID, purpose, subjectID string, at int64) (*ecdsa.PublicKey, *Error) {
+	return r.cur.Load().Lookup(keyID, purpose, subjectID, at)
+}
+
+// Len 返回当前公钥表中的公钥数量。
+func (r *ReloadableKeyRegistry) Len() int { return r.cur.Load().Len() }

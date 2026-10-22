@@ -125,7 +125,7 @@ stateDiagram-v2
     [*] --> ISSUED: 首次见到 cap_id（INSERT OR IGNORE）
     ISSUED --> CONSUMING: 同一事务内 Credential ACTIVE 且 epoch 相等，CAS 成功
     CONSUMING --> CONSUMED: 上游已执行（2xx 或 3xx/4xx），保存结果与回执
-    CONSUMING --> FAILED: 解密失败 / 上游不可达或 5xx
+    CONSUMING --> FAILED: 解密失败 / 上游不可达或 5xx / 重启时发现遗留
     CONSUMED --> CONSUMED: 同 cap + 同 request_hash → 返回原结果与原回执
 ```
 
@@ -160,7 +160,7 @@ Broker 保证的是：
 | 上游返回之后、写回 `CONSUMED` 之前 | 是 | `CONSUMING` | 副作用发生了一次，但 Broker 没有记录结果 |
 | 上游超时（不知道对方是否执行） | 未知 | `FAILED` | Broker 不会重试，最坏情况是执行了一次 |
 
-三种情况都满足“至多一次”，代价是可能“零次”：在安全和可用之间，Broker 选择了安全。要把“至多一次”补成“恰好一次”，需要外部服务配合实现幂等。Broker 已经在每次调用里带上 `X-Idempotency-Key: <capability_id>` 和 `X-Request-Hash`，Mock 服务据此去重（`TestWriteSideEffectsAndIdempotency`）。将来如果加恢复流程，可以安全地重试卡在 `CONSUMING` 的调用，由上游负责去重。
+三种情况都满足“至多一次”，代价是可能“零次”：在安全和可用之间，Broker 选择了安全。要把“至多一次”补成“恰好一次”，需要外部服务配合实现幂等。Broker 已经在每次调用里带上 `X-Idempotency-Key: <capability_id>` 和 `X-Request-Hash`，Mock 服务据此去重（`TestWriteSideEffectsAndIdempotency`）。Broker 启动时、开始监听之前，会把遗留的 `CONSUMING` 改为 `FAILED`（`capability.Store.RecoverAbandoned`，审计事件 `capability.recover`）。这里选择不重试：并不是所有上游都会按幂等键去重，重试会打破“至多一次”。如果将来确认上游都支持幂等，可以改为用原幂等键重试。
 
 上游已经处理、但返回 3xx/4xx 时，Capability 记为 `CONSUMED`（回执 `outcome=ERROR`，`code=UPSTREAM_REJECTED`），不允许重试。原因是上游可能已经产生了部分副作用，只有 Broker 自己能确认没有副作用的失败（解密失败、上游不可达、5xx），才会记为 `FAILED`。
 
@@ -236,7 +236,8 @@ Challenge 用来防止“同一份 Holder Proof 再提交一次”。Capability 
 | Receipt 签名私钥 | `BROKER_SIGNING_KEY_FILE`，不存在时生成，权限 0600；公钥以 `RECEIPT_SIGNING` 发布 | 仅 Broker 进程 |
 | 审计检查点私钥 | `BROKER_CHECKPOINT_KEY_FILE`，必须与上一项不同（启动时检查） | 仅 Broker 进程 |
 | 管理员令牌 | `BROKER_ADMIN_TOKEN`（至少 16 字符，常量时间比较） | 运维 / 实验脚本，**Agent 不持有** |
-| AA 与 Agent 公钥表 | `BROKER_KEY_REGISTRY`，直接读取 A 的 `public-keys.json` | 只读 |
+| AA 与 Agent 公钥表 | `BROKER_KEY_REGISTRY`，直接读取 A 的 `public-keys.json`；`SIGHUP` 时整体重新加载，解析失败保留旧表 | 只读 |
+| TLS 证书 / 私钥 / 客户端 CA | `BROKER_TLS_CERT_FILE`、`BROKER_TLS_KEY_FILE`、`BROKER_TLS_CLIENT_CA_FILE`（可选，开启 mTLS） | 仅 Broker 进程 |
 | 可信 AA | `BROKER_TRUSTED_ISSUER` | 配置项，不取自请求 |
 
 `audience`、`trusted_issuer` 和公钥表全部来自 Broker 本地配置，没有一项取自请求。
@@ -252,8 +253,9 @@ Challenge 用来防止“同一份 Holder Proof 再提交一次”。Capability 
 
 | 限制 | 影响 | 可能的改进 |
 |---|---|---|
-| 崩溃后 Capability 停在 `CONSUMING` | 这张 Capability 不能再用，需重新签发（fail closed） | 启动时扫描：超时的 `CONSUMING` 改为 `FAILED`；或借助上游幂等键安全重试 |
-| 公钥表启动时加载 | 换 AA、Agent 或 Broker 公钥需要重启 | 定期重新加载，或通过 SIGHUP 触发 |
+| 崩溃后 Capability 停在 `CONSUMING` | 已处理：启动时改为 `FAILED`，需重新签发（fail closed） | 上游全部支持幂等后，可改为用原幂等键重试 |
+| Broker 自身密钥启动时加载 | AA / Agent 公钥表已支持 `SIGHUP` 热加载；换 Broker 的 Receipt / 检查点密钥仍需重启 | 发布多把 Broker 密钥并支持标记 `REVOKED` |
+| 传输层不是国密 TLCP | TLS 用 Go 标准库证书算法；协议层仍是 SM2 / SM3 | 引入 TLCP 实现，需 A 的客户端同步支持 |
 | 审计条目用 `encoding/json` | 字段顺序固定，但不是 `ZTCANON-JSON-v1` | 改用 `internal/canonical`，同步更新 `audit-chain.md` |
 | 每次拒绝都签一张 DENIED 回执 | 拒绝路径多一次 SM2 签名 | 视 C 的压测结果改为按需签发 |
 | 单机 SQLite | 写入串行，吞吐受限 | 线性化点的语义可以迁移到 PostgreSQL 的 `SELECT … FOR UPDATE` |
