@@ -4,44 +4,43 @@ import os
 import json
 import threading
 import time
+import random
 import requests
 import sys
-import os
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../../credential-broker/scripts")))
 from pathlib import Path
 from datetime import datetime
-from e2e_demo_lib import Agent, http, SignedCapability
 
 BROKER_DIR = Path(__file__).resolve().parent.parent.parent / "credential-broker"
+sys.path.insert(0, str(BROKER_DIR))
+
+from scripts.e2e_demo_lib import Agent, http, SignedCapability
 
 BASE_BROKER = "http://127.0.0.1:8080"
 BASE_MOCK = "http://127.0.0.1:9090"
 
-_env_path = Path(__file__).resolve().parent.parent.parent / "credential-broker" / ".env"
-if _env_path.exists() and not os.environ.get("BROKER_ADMIN_TOKEN"):
-    with open(_env_path, "r") as _f:
-        for _line in _f:
+# 自动读取 ADMIN_TOKEN
+_env_path = BROKER_DIR / ".env"
+if _env_path.exists():
+    with open(_env_path, "r") as f:
+        for _line in f:
             if _line.startswith("BROKER_ADMIN_TOKEN="):
                 os.environ["BROKER_ADMIN_TOKEN"] = _line.strip().split("=")[1]
                 break
-
 ADMIN_TOKEN = os.environ.get("BROKER_ADMIN_TOKEN", "")
-RUNTIME_DIR = BROKER_DIR.parent / ".runtime"
 
+RUNTIME_DIR = BROKER_DIR.parent / ".runtime"
 ROUNDS = 50
 
 def run_round(round_id, agent):
     # 1. 恢复环境，确保 github-prod 是活着的，且 epoch 对齐
     http("POST", f"{BASE_BROKER}/v1/admin/reset")
-    # 重新灌入凭据
+    headers = {"Authorization": f"Bearer {ADMIN_TOKEN}"}
     requests.post(f"{BASE_BROKER}/v1/credentials", 
                   json={"credential_id":"github-prod","provider":"git","secret":"mock-git-secret"},
-                  headers={"Authorization": f"Bearer {ADMIN_TOKEN}"})
-    # 轮换到 epoch 17
+                  headers=headers)
     for _ in range(16):
         requests.post(f"{BASE_BROKER}/v1/credentials/github-prod/rotate", 
-                      json={"secret":"mock-git-secret"},
-                      headers={"Authorization": f"Bearer {ADMIN_TOKEN}"})
+                      json={"secret":"mock-git-secret"}, headers=headers)
 
     _, before = http("GET", f"{BASE_MOCK}/stats")
     calls_before = before["calls"].get("git", 0)
@@ -63,6 +62,7 @@ def run_round(round_id, agent):
 
     def execute_worker():
         barrier.wait()
+        # 执行全速发出
         try:
             r = requests.post(f"{BASE_BROKER}/v1/execute", data=raw, headers={"Content-Type": "application/json"}, timeout=5)
             results["execute"] = (r.status_code, r.json())
@@ -71,10 +71,10 @@ def run_round(round_id, agent):
 
     def revoke_worker():
         barrier.wait()
-        # 等一丁点时间，让 execute 有概率先拿到锁
-        time.sleep(0.002)
+        # 撤销接口很快，为了让执行有机会先赢，让撤销随机延迟 0~40 毫秒
+        time.sleep(0.1)
         r = requests.post(f"{BASE_BROKER}/v1/credentials/github-prod/revoke", 
-                          headers={"Authorization": f"Bearer {ADMIN_TOKEN}"}, timeout=5)
+                          headers=headers, timeout=5)
         results["revoke"] = (r.status_code, r.json())
 
     t1 = threading.Thread(target=execute_worker)
@@ -115,30 +115,37 @@ def run_round(round_id, agent):
     }
 
 def main():
-    agent = Agent(RUNTIME_DIR, "http://127.0.0.1:8000", BASE_BROKER)
-
-    # 自动重置 B 系统环境并灌入初始数据 (防止只能跑一次的问题)
+    # 自动调用官方环境重置脚本
+    print("=== 自动重置 B 系统环境并灌入初始数据 ===")
     import subprocess
     root_dir = Path(__file__).resolve().parent.parent.parent
     env = os.environ.copy()
-    _env_path = root_dir / "credential-broker" / ".env"
-    if _env_path.exists():
-        with open(_env_path, "r") as f:
-            for line in f:
-                if line.startswith("BROKER_ADMIN_TOKEN="):
-                    env["BROKER_ADMIN_TOKEN"] = line.strip().split("=")[1]
-                    break
+    env["BROKER_ADMIN_TOKEN"] = ADMIN_TOKEN
     env["MOCK_GIT_TOKEN"] = "mock-git-secret"
     env["MOCK_DB_TOKEN"] = "mock-db-secret"
-
     subprocess.run(["bash", "scripts/reset.sh"], cwd=str(root_dir / "credential-broker"), env=env, stdout=subprocess.DEVNULL)
     subprocess.run(["bash", "scripts/seed.sh"], cwd=str(root_dir / "credential-broker"), env=env, stdout=subprocess.DEVNULL)
+    print("=== 环境重置完毕，开始测试 ===")
+
+    agent = Agent(RUNTIME_DIR, "http://127.0.0.1:8000", BASE_BROKER)
     rows = []
+    
+    execute_wins = 0
+    revoke_wins = 0
+
     for i in range(1, ROUNDS + 1):
         row = run_round(i, agent)
         rows.append(row)
         mark = "PASS" if row["safe"] else "FAIL"
-        print(f"[{mark}] round={i:2d} execute={row['execute_allowed']} "
+        
+        if row["execute_allowed"]:
+            execute_wins += 1
+            winner = "执行先赢"
+        else:
+            revoke_wins += 1
+            winner = "撤销先赢"
+            
+        print(f"[{mark}] round={i:2d} {winner} | execute={row['execute_allowed']} "
               f"error={row['execute_error']:25s} side_effects={row['side_effect_count']}")
 
     with open("evaluation-dashboard/results/revocation.csv", "w", newline="", encoding="utf-8") as f:
@@ -148,6 +155,7 @@ def main():
 
     passed = sum(1 for r in rows if r["safe"])
     print(f"\n已生成 revocation.csv：{passed}/{len(rows)} safe")
+    print(f"📊 统计：执行先赢 {execute_wins} 次，撤销先赢 {revoke_wins} 次")
 
 if __name__ == "__main__":
     main()
