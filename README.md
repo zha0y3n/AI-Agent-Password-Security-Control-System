@@ -147,6 +147,20 @@ Dashboard 读取上述 7 份 CSV，提供 7 个 Tab。2026-10-21 在 `git archiv
 - 历史提交曾出现硬编码 `ADMIN_TOKEN`；当前脚本已改为从环境变量/`.env` 读取，若该 token 在任何环境使用过必须轮换；
 - C 的进度文档与最终展示口径。
 
+## 一键验证
+
+需要 Go、Python 3.11+、`curl`、`openssl`；`--compose` 另需 Docker（会占用 8000/8080/9090）。
+
+```bash
+bash scripts/bootstrap.sh              # 首次：创建 .venv 并安装 agent-aa
+bash scripts/verify-all.sh             # Broker 单元测试、A 单元测试、跨语言互操作、真实进程的 A+B 生命周期联调
+bash scripts/verify-all.sh --compose   # 另加 Docker Compose 全链路
+```
+
+联调步骤使用临时目录里的运行时、数据库和随机密钥，监听随机空闲端口，结束后全部删除，不会读写仓库里的 `.runtime/`、`.env` 或 `data/`，也不会结束本机其他进程。最后输出每一步的 PASS / FAIL；任一步失败时退出码为 1。本机（WSL2、Go 1.27.1、Python 3.13）带 `--compose` 约 35 秒（镜像已缓存时）。
+
+C 的 7 类实验见下方 C 部分与 `evaluation-dashboard/README.md`（脚本固定使用 8000/8080/9090，并会写入 `evaluation-dashboard/results/`）。
+
 ## 快速开始
 
 ### A：Agent + AA
