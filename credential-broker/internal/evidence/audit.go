@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/canonical"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/crypto"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/repository"
 )
@@ -24,13 +25,19 @@ const CheckpointDomain = "ACG-AUDIT-CHECKPOINT-v1"
 // GenesisHash 是链首条目的 prev_hash（32 个零字节）。
 var GenesisHash = make([]byte, crypto.SM3Size)
 
-// entryBody 是审计条目 L_i 的结构。字段顺序固定，data 为 map 时键按字典序输出。
-// TODO(阶段二): 改用与 A 一致的 Canonical JSON 实现。
-type entryBody struct {
-	Seq  int64          `json:"seq"`
-	At   int64          `json:"at"`
-	Type string         `json:"type"`
-	Data map[string]any `json:"data"`
+// encodeEntry 把审计条目 L_i 编码为 ZTCANON-JSON-v1：{"at","data","seq","type"}，键按 code point 升序。
+// data 先经 encoding/json 归一化（命名字符串类型、结构体等），再按 A 的规则严格解析和编码；
+// 含浮点数等不符合 ZTCANON-JSON-v1 的值时返回错误（fail closed，不写入审计也不提交业务状态）。
+func encodeEntry(seq, at int64, typ string, data map[string]any) ([]byte, error) {
+	raw, err := json.Marshal(data)
+	if err != nil {
+		return nil, err
+	}
+	normalized, err := canonical.Parse(raw)
+	if err != nil {
+		return nil, fmt.Errorf("audit data is not ZTCANON-JSON-v1: %w", err)
+	}
+	return canonical.Marshal(map[string]any{"seq": seq, "at": at, "type": typ, "data": normalized})
 }
 
 // Record 是导出的审计条目。Entry 为 L_i 的原始字节（JSON 文本）。
@@ -74,7 +81,7 @@ func (a *Auditor) Append(ctx context.Context, tx *sql.Tx, typ string, data map[s
 	if data == nil {
 		data = map[string]any{}
 	}
-	entry, err := json.Marshal(entryBody{Seq: seq, At: a.now().Unix(), Type: typ, Data: data})
+	entry, err := encodeEntry(seq, a.now().Unix(), typ, data)
 	if err != nil {
 		return 0, err
 	}
@@ -215,7 +222,10 @@ func VerifyChain(records []Record, checkpoints []Checkpoint, pub *ecdsa.PublicKe
 		if r.Seq != want {
 			return fmt.Errorf("seq %d: expected seq %d (entry missing or reordered)", r.Seq, want)
 		}
-		var body entryBody
+		// 只读取内嵌 seq；哈希覆盖原始字节，因此此前用 encoding/json 写入的条目仍可复核。
+		var body struct {
+			Seq int64 `json:"seq"`
+		}
 		if err := json.Unmarshal([]byte(r.Entry), &body); err != nil {
 			return fmt.Errorf("seq %d: malformed entry: %w", r.Seq, err)
 		}

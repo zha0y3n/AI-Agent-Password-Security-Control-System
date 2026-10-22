@@ -16,11 +16,13 @@
 条目格式：
 
 ```json
-{"seq": 3, "entry": "{\"seq\":3,\"at\":1791797696,\"type\":\"credential.rotate\",\"data\":{...}}",
+{"seq": 3, "entry": "{\"at\":1791797696,\"data\":{...},\"seq\":3,\"type\":\"credential.rotate\"}",
  "prev_hash": "<hex>", "hash": "<hex>"}
 ```
 
 `entry` 字段是条目 `L_i` 的**原始字节**（UTF-8 JSON 文本），验证时直接按字符串字节使用，不要重新序列化。
+
+`L_i` 是 `{"at","data","seq","type"}` 的 `ZTCANON-JSON-v1` 编码（与 A 的 `canonical_json` 相同：键按 code point 升序、无空白、无浮点）。因此 `canonical_json(json.loads(entry)) == entry` 对每条新条目成立，可以作为额外的格式检查。
 
 ## 2. 哈希链
 
@@ -70,9 +72,11 @@ A 的公钥模型中 RECEIPT_SIGNING 只用于回执。
 | `capability.complete` | 执行成功 | cap_id, result_hash |
 | `capability.fail` | 执行失败 | cap_id, error_code |
 | `execute.deny` | 请求被拒绝 | failed_step, code；Capability 验签通过时另有 cap_id, request_hash, receipt_id |
+| `capability.recover` | 启动时把崩溃遗留的 `CONSUMING` 改为 `FAILED` | cap_id, error_code, reason |
+| `keys.reload` | `SIGHUP` 成功重新加载 AA / Agent 公钥表 | trusted_keys |
 
 审计内容**从不包含** Credential 明文或密文。
 
-## 5. 待对齐
+## 5. 编码变更说明
 
-条目 `L_i` 目前用 Go `encoding/json` 输出（字段顺序固定、map 键按字典序）。阶段二将改为与 A 一致的 Canonical JSON。
+2026-10-21 之前的条目用 Go `encoding/json` 输出（字段顺序 `seq, at, type, data`，`<`、`>`、`&` 会转义为 `\u003c` 等）。哈希只覆盖原始字节，所以旧条目和新条目可以出现在同一条链里，复核方法不变；只有“重新规范化后字节相同”这项额外检查不适用于旧条目。

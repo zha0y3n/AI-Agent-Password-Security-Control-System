@@ -353,7 +353,6 @@ docs/                 设计说明、威胁与防御对照、答辩材料
 - **外部 API 成功但状态未落盘**：上游已执行而 Broker 写库前崩溃时，Capability 会停在 `CONSUMING`。重启时 Broker 把它们改为 `FAILED`，之后的提交返回 `CAPABILITY_ALREADY_FAILED`，不会重复执行；Agent 需要重新申请 Capability（新 Capability 的幂等键不同，上游无法去重）。恢复只在启动时进行，前提是同一数据库只有一个 Broker 进程。
 - **公钥轮换**：AA / Agent 公钥表可以用 `SIGHUP` 热加载。Broker 自己的 Receipt / 检查点密钥仍在启动时加载，更换需要重启；`/v1/broker/key-registry` 只发布当前密钥，无法把泄露的旧 Broker 密钥标记为 `REVOKED`，只能换用新的 `BROKER_KEY_ID` 并通知验证方。
 - **传输层算法**：TLS 使用 Go 标准库（ECDSA / RSA 证书），不是国密 TLCP；协议层的签名与摘要仍是 SM2 / SM3。
-- **审计条目编码**：审计条目目前用 `encoding/json`（字段顺序固定），还没有改用 `ZTCANON-JSON-v1`。格式见 `docs/audit-chain.md`。
 - **`POST /v1/admin/reset`** 会清空审计链，只能用于开发和实验环境。
 - **上游网络隔离**：Demo 中 Mock 上游可以从本机直接访问。没有 Credential 只会返回 401，但生产环境需要让上游只接受来自 Broker 的连接（mTLS 或网络策略）。
 

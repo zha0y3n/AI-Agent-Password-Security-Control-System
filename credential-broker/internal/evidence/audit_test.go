@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/canonical"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/crypto"
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/repository"
 )
@@ -125,5 +126,71 @@ func TestChainTamperDetection(t *testing.T) {
 				t.Log(err)
 			}
 		})
+	}
+}
+
+type testStatus string
+
+func TestEntriesAreCanonical(t *testing.T) {
+	a := newAuditor(t, 0)
+	err := a.db.WithTx(context.Background(), func(tx *sql.Tx) error {
+		_, err := a.Append(context.Background(), tx, "test.event", map[string]any{
+			"status": testStatus("ACTIVE"), "epoch": int64(17), "note": "<&>", "list": []string{"b", "a"},
+		})
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs, _ := load(t, a)
+	v, err := canonical.Parse([]byte(rs[0].Entry))
+	if err != nil {
+		t.Fatalf("entry is not ZTCANON-JSON-v1: %v", err)
+	}
+	again, err := canonical.Marshal(v)
+	if err != nil || string(again) != rs[0].Entry {
+		t.Fatalf("entry is not in canonical form:\n%s\n%s", rs[0].Entry, again)
+	}
+	if !strings.HasPrefix(rs[0].Entry, `{"at":`) ||
+		!strings.HasSuffix(rs[0].Entry, `,"data":{"epoch":17,"list":["b","a"],"note":"<&>","status":"ACTIVE"},"seq":1,"type":"test.event"}`) {
+		t.Fatalf("unexpected entry %s", rs[0].Entry)
+	}
+}
+
+func TestEntryRejectsNonCanonicalData(t *testing.T) {
+	a := newAuditor(t, 0)
+	err := a.db.WithTx(context.Background(), func(tx *sql.Tx) error {
+		_, err := a.Append(context.Background(), tx, "test.event", map[string]any{"ratio": 1.5})
+		return err
+	})
+	if err == nil {
+		t.Fatal("float audit data must be rejected")
+	}
+	if rs, _ := load(t, a); len(rs) != 0 {
+		t.Fatal("rejected entry must not be written")
+	}
+}
+
+// 升级前用 encoding/json 写入的条目：哈希覆盖原始字节，仍然可以复核。
+func TestLegacyEntriesStillVerify(t *testing.T) {
+	a := newAuditor(t, 0)
+	appendN(t, a, 2)
+	legacy := `{"seq":3,"at":1791797696,"type":"credential.rotate","data":{"credential_id":"github-prod"}}`
+	err := a.db.WithTx(context.Background(), func(tx *sql.Tx) error {
+		var prev []byte
+		if err := tx.QueryRow(`SELECT hash FROM audit_log WHERE seq = 2`).Scan(&prev); err != nil {
+			return err
+		}
+		_, err := tx.Exec(`INSERT INTO audit_log(seq, entry, prev_hash, hash) VALUES (3, ?, ?, ?)`,
+			[]byte(legacy), prev, crypto.SM3Concat(prev, []byte(legacy)))
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	appendN(t, a, 1)
+	rs, cps := load(t, a)
+	if err := VerifyChain(rs, cps, a.signer.PublicKey()); err != nil {
+		t.Fatalf("mixed legacy/canonical chain: %v", err)
 	}
 }
