@@ -91,3 +91,7 @@ Dashboard 读取 `results/` 下的 7 份 CSV，分为 issue 测试、verify 测�
 - [contracts/README.md](contracts/README.md)：CSV 字段定义
 - [../docs/threat-model.md](../docs/threat-model.md)：威胁模型
 - [../credential-broker/README.md](../credential-broker/README.md#实验支撑接口)：Broker 的实验支撑接口
+
+## ⚠️ 关于撤销竞态测试的预期断言
+在 `run_revocation_tests.py` 中，由于 OS 线程调度和网络延迟的不可预测性，我们**不强制断言谁（执行或撤销）先到达终点**。
+我们的核心安全断言是 `safe`（即：如果执行成功，底层副作用必须严格等于 1；如果执行被拒，副作用必须严格等于 0）。`expected_decision` 字段记录的是当前测试场景（如强制执行先赢）的理论预期，而 `actual_decision` 是实际发生的线性化顺序。只要 `safe` 为真，即证明系统在并发下未发生数据错乱。

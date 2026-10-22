@@ -101,3 +101,14 @@ with tabs[6]:
         total, passed = len(df), int(raw_df["passed"].sum())
         st.metric("拦截成功率", f"{passed}/{total} ({(passed/total)*100:.1f}%)")
         st.dataframe(df, use_container_width=True)
+
+with tab7:
+    df = load("broker_full_attack.csv")
+    if df is None: st.info("Broker全链路测试尚未接入")
+    else:
+        total = len(df); passed = int(df["passed"].sum())
+        c1, c2, c3 = st.columns(3)
+        c1.metric("用例数", total)
+        c2.metric("通过", passed)
+        c3.metric("通过率", f"{passed / total * 100:.1f}%")
+        st.dataframe(df, use_container_width=True)

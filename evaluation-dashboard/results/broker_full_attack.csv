@@ -1,8 +1,8 @@
 case_id,category,description,expected_decision,actual_decision,error_code,credential_accessed,side_effect_count,passed,timestamp
-normal,broker_full_attack,Broker全链路正常请求,ALLOW,ALLOW,,True,1,True,2026-10-22T14:14:24
-sequential_replay,broker_full_attack,同一张票第二次提交,DENY,DENY,CHALLENGE_USED,False,0,True,2026-10-22T14:14:24
-wrong_holder,broker_full_attack,偷票并使用攻击者私钥签名,DENY,DENY,INVALID_SIGNATURE,False,0,True,2026-10-22T14:14:24
-cross_resource,broker_full_attack,篡改请求资源(绑定校验),DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,True,2026-10-22T14:14:24
-cross_task,broker_full_attack,篡改请求任务(绑定校验),DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,True,2026-10-22T14:14:24
-request_hash_mismatch,broker_full_attack,篡改实际请求路径(哈希校验),DENY,DENY,REQUEST_HASH_MISMATCH,False,0,True,2026-10-22T14:14:24
-old_epoch,broker_full_attack,旧 Credential Epoch,DENY,DENY,CREDENTIAL_EPOCH_MISMATCH,False,0,True,2026-10-22T14:14:24
+normal,broker_full_attack,Broker全链路正常请求,ALLOW,ALLOW,,True,1,True,2026-10-22T15:26:41
+sequential_replay,broker_full_attack,同一张票第二次提交,DENY,DENY,CHALLENGE_USED,False,0,True,2026-10-22T15:26:41
+wrong_holder,broker_full_attack,偷票并使用攻击者私钥签名,DENY,DENY,INVALID_SIGNATURE,False,0,True,2026-10-22T15:26:41
+cross_resource,broker_full_attack,篡改请求资源(绑定校验),DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,True,2026-10-22T15:26:41
+cross_task,broker_full_attack,篡改请求任务(绑定校验),DENY,DENY,REQUEST_BINDING_MISMATCH,False,0,True,2026-10-22T15:26:41
+request_hash_mismatch,broker_full_attack,篡改实际请求路径(哈希校验),DENY,DENY,REQUEST_HASH_MISMATCH,False,0,True,2026-10-22T15:26:41
+old_epoch,broker_full_attack,旧 Credential Epoch,DENY,DENY,CREDENTIAL_EPOCH_MISMATCH,False,0,True,2026-10-22T15:26:41

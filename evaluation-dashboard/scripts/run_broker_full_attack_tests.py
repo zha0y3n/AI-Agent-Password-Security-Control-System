@@ -62,7 +62,14 @@ def main():
         calls_after = after["calls"].get("git", 0)
         side_effects = calls_after - calls_before
         
-        return ("ALLOW" if dec else "DENY"), err, side_effects > 0, side_effects
+        # 【修复】直接读取响应体中的权威字段 credential_loaded
+        cred_loaded = res.get("credential_loaded", False)
+        if "result_envelope" in res:
+            cred_loaded = res["result_envelope"].get("credential_loaded", cred_loaded)
+        if "receipt" in res and isinstance(res["receipt"], dict):
+            cred_loaded = res["receipt"].get("credential_loaded", cred_loaded)
+            
+        return ("ALLOW" if dec else "DENY"), err, cred_loaded, side_effects
 
     # 1. 正常请求
     req = agent.request()
