@@ -1,51 +1,71 @@
-round,case_id,category,expected_decision,actual_decision,error_code,credential_accessed,side_effect_count,safe,passed,timestamp
-1,revocation_1,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:20
-2,revocation_2,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:21
-3,revocation_3,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:21
-4,revocation_4,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:22
-5,revocation_5,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:23
-6,revocation_6,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:23
-7,revocation_7,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:23
-8,revocation_8,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:24
-9,revocation_9,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:25
-10,revocation_10,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:25
-11,revocation_11,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:26
-12,revocation_12,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:26
-13,revocation_13,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:27
-14,revocation_14,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:27
-15,revocation_15,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:28
-16,revocation_16,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:28
-17,revocation_17,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:29
-18,revocation_18,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:30
-19,revocation_19,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:30
-20,revocation_20,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:31
-21,revocation_21,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:31
-22,revocation_22,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:32
-23,revocation_23,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:32
-24,revocation_24,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:33
-25,revocation_25,revocation,ALLOW or DENY,ALLOW,,True,1,True,True,2026-10-22T13:39:33
-26,revocation_26,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:34
-27,revocation_27,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:34
-28,revocation_28,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:35
-29,revocation_29,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:35
-30,revocation_30,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:35
-31,revocation_31,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:36
-32,revocation_32,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:36
-33,revocation_33,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:37
-34,revocation_34,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:37
-35,revocation_35,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:37
-36,revocation_36,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:38
-37,revocation_37,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:38
-38,revocation_38,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:39
-39,revocation_39,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:39
-40,revocation_40,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:39
-41,revocation_41,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:40
-42,revocation_42,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:40
-43,revocation_43,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:41
-44,revocation_44,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:41
-45,revocation_45,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:41
-46,revocation_46,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:42
-47,revocation_47,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:42
-48,revocation_48,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:43
-49,revocation_49,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:43
-50,revocation_50,revocation,ALLOW or DENY,DENY,CREDENTIAL_INACTIVE,False,0,True,True,2026-10-22T13:39:43
+round,case_id,category,scenario,expected_decision,actual_decision,error_code,credential_accessed,side_effect_count,execute_http,revoke_http,safe,passed,timestamp
+1,revocation_1,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:27
+2,revocation_2,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:28
+3,revocation_3,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:28
+4,revocation_4,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:29
+5,revocation_5,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:29
+6,revocation_6,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:30
+7,revocation_7,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:30
+8,revocation_8,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:31
+9,revocation_9,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:31
+10,revocation_10,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:32
+11,revocation_11,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:33
+12,revocation_12,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:33
+13,revocation_13,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:34
+14,revocation_14,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:34
+15,revocation_15,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:35
+16,revocation_16,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:35
+17,revocation_17,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:36
+18,revocation_18,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:36
+19,revocation_19,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:37
+20,revocation_20,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:37
+21,revocation_21,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:38
+22,revocation_22,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:38
+23,revocation_23,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:39
+24,revocation_24,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:40
+25,revocation_25,revocation,execute_first,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:40
+26,revocation_26,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:41
+27,revocation_27,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:41
+28,revocation_28,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:42
+29,revocation_29,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:42
+30,revocation_30,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:42
+31,revocation_31,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:43
+32,revocation_32,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:43
+33,revocation_33,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:44
+34,revocation_34,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:44
+35,revocation_35,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:44
+36,revocation_36,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:45
+37,revocation_37,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:45
+38,revocation_38,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:46
+39,revocation_39,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:46
+40,revocation_40,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:46
+41,revocation_41,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:47
+42,revocation_42,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:47
+43,revocation_43,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:47
+44,revocation_44,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:48
+45,revocation_45,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:48
+46,revocation_46,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:49
+47,revocation_47,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:49
+48,revocation_48,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:49
+49,revocation_49,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:50
+50,revocation_50,revocation,revoke_first,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:50
+51,revocation_51,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:51
+52,revocation_52,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:51
+53,revocation_53,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:51
+54,revocation_54,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:52
+55,revocation_55,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:52
+56,revocation_56,revocation,random_race,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:53
+57,revocation_57,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:53
+58,revocation_58,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:53
+59,revocation_59,revocation,random_race,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:54
+60,revocation_60,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:54
+61,revocation_61,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:55
+62,revocation_62,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:55
+63,revocation_63,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:55
+64,revocation_64,revocation,random_race,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:56
+65,revocation_65,revocation,random_race,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:56
+66,revocation_66,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:56
+67,revocation_67,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:57
+68,revocation_68,revocation,random_race,DENY,DENY,CREDENTIAL_INACTIVE,False,0,403,200,True,True,2026-10-22T14:17:57
+69,revocation_69,revocation,random_race,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:58
+70,revocation_70,revocation,random_race,ALLOW,ALLOW,,True,1,200,200,True,True,2026-10-22T14:17:58
