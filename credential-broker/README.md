@@ -293,11 +293,14 @@ sh scripts/reset.sh                   # 清空 Broker（Credential、Capability�
 | `BROKER_CHECKPOINT_EVERY` | `100` | 每 N 条审计记录自动生成签名检查点（0 关闭） |
 | `BROKER_UPSTREAM_URL` | `http://127.0.0.1:9090` | 受保护服务地址 |
 | `BROKER_UPSTREAM_TIMEOUT` | `10s` | 上游超时 |
+| `BROKER_UPSTREAM_CA_FILE` | 空 | 校验上游证书的 CA（代替系统信任库）；需要 `https://` 上游 |
+| `BROKER_UPSTREAM_CLIENT_CERT_FILE` / `BROKER_UPSTREAM_CLIENT_KEY_FILE` | 空 | 调用上游时出示的客户端证书（上游要求 mTLS 时）；必须同时设置，需要 `https://` 上游 |
 | `BROKER_ENABLE_RESET` | `0` | 开放 `POST /v1/admin/reset`。**生产环境不得开启** |
 | `BROKER_TLS_CERT_FILE` / `BROKER_TLS_KEY_FILE` | 空 | 同时设置时以 HTTPS 监听（TLS ≥ 1.2）；只设一个则启动失败 |
 | `BROKER_TLS_CLIENT_CA_FILE` | 空 | 设置后要求并校验客户端证书（mTLS），需要先开启 TLS |
 | `BROKER_LOG_LEVEL` | `info` | 日志只记录方法、路径、状态码、耗时，从不记录请求体或头部 |
 | `MOCK_ADDR` / `MOCK_GIT_TOKEN` / `MOCK_DB_TOKEN` | `:9090` / 必填 / 必填 | Mock 上游期望的 Credential，必须和录入 Vault 的值一致 |
+| `MOCK_TLS_CERT_FILE` / `MOCK_TLS_KEY_FILE` / `MOCK_TLS_CLIENT_CA_FILE` | 空 | Mock 以 HTTPS 监听；设置客户端 CA 后，Git / DB 接口只接受该 CA 签发的客户端证书（403 `client certificate required`），`/stats`、`/reset`、`/health` 不受影响 |
 
 ## 轮换 Broker 签名密钥
 
@@ -310,7 +313,7 @@ curl -s $BROKER_URL/v1/broker/key-registry > retired.json
 export BROKER_SIGNING_KEY_FILE=data/broker-sm2-02.key BROKER_KEY_ID=broker-key-02 BROKER_RETIRED_KEYS=retired.json
 ```
 
-`BROKER_RETIRED_KEYS` 中每条记录必须是本 Broker 的 `RECEIPT_SIGNING` 公钥，`key_id` 与公钥都不能和当前密钥相同，否则 Broker 拒绝启动。再次轮换时，把新的旧记录追加进同一个文件。
+`BROKER_RETIRED_KEYS` 中每条记录必须是本 Broker 的 `RECEIPT_SIGNING` 公钥，`key_id` 与公钥都不能和当前密钥相同，否则 Broker 拒绝启动。`/v1/broker/key-registry` 的输出已包含更早的旧公钥，所以每次轮换前保存它的完整输出即可。
 
 ## 测试
 
@@ -329,6 +332,9 @@ make interop       # 跨语言：A 的 Python 代码签发 bundle → Go 执行�
 - 崩溃遗留的 `CONSUMING` 在启动时转为 `FAILED`，且不能再次消费
 - 公钥表热加载：吊销立即生效，非法文件不替换旧表
 - TLS / mTLS：无客户端证书或非受信 CA 签发的证书握手失败
+- 上游 mTLS：持有正确 Credential 但没有 Broker 客户端证书的调用方被 Mock 拒绝，无副作用
+- 旧 Receipt 公钥发布：`ACTIVE` 仍可验证，`REVOKED` 被拒绝，非法配置拒绝启动
+- 审计条目为 `ZTCANON-JSON-v1`，旧格式条目仍可复核
 - 原样重放；同一 Capability 带新 Challenge 时幂等返回同一回执
 - 20 路并发重放写操作，副作用恰好一次
 - 上游 4xx / 不可达
@@ -368,6 +374,6 @@ docs/                 设计说明、威胁与防御对照、答辩材料
 - **公钥轮换**：AA / Agent 公钥表可以用 `SIGHUP` 热加载。Broker 自己的 Receipt 密钥通过 `BROKER_RETIRED_KEYS` 轮换（旧公钥继续发布，泄露的标记为 `REVOKED`），但需要重启 Broker。审计检查点密钥换了以后，旧检查点无法用新公钥复核，换之前应先导出并保存旧公钥。
 - **传输层算法**：TLS 使用 Go 标准库（ECDSA / RSA 证书），不是国密 TLCP；协议层的签名与摘要仍是 SM2 / SM3。
 - **`POST /v1/admin/reset`** 会清空审计链，只能用于开发和实验环境。
-- **上游网络隔离**：Demo 中 Mock 上游可以从本机直接访问。没有 Credential 只会返回 401，但生产环境需要让上游只接受来自 Broker 的连接（mTLS 或网络策略）。
+- **上游网络隔离**：默认 Demo 中 Mock 上游可以从本机直接访问（没有 Credential 只会返回 401）。设置 `MOCK_TLS_CLIENT_CA_FILE` 与 `BROKER_UPSTREAM_CLIENT_*` 后，受保护接口只接受 Broker 的客户端证书，即使 Credential 泄露也不能绕过 Broker 直接调用。真实上游需要自身支持 mTLS 或依赖网络策略。
 
 完整的限制与可能的改进见 [docs/architecture.md §11](docs/architecture.md#11-已知限制)。

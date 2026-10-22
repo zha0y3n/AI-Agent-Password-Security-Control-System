@@ -34,7 +34,7 @@
 - **伪造 Capability**：需要 AA 的 SM2 私钥。
 - **偷别人的 Capability**：需要原 Agent 的 Holder 私钥，而且 Holder Proof 要绑定 Broker 刚发出的 Challenge。
 - **拿合法 Capability 干别的事**：Broker 自己重算请求摘要。路径、资源、操作、body 改一个字节，摘要就对不上。
-- **部署前提**：上游只接受来自 Broker 的连接，这一条靠网络隔离保证。Demo 中 Mock 绑定 127.0.0.1，生产环境应使用 mTLS 或网络策略。
+- **部署前提**：上游只接受来自 Broker 的连接。Mock 支持用 mTLS 演示这一点（`MOCK_TLS_CLIENT_CA_FILE` + `BROKER_UPSTREAM_CLIENT_*`）：即使 Credential 泄露，没有 Broker 客户端证书也调不通。真实上游需要自身支持 mTLS 或依赖网络策略。
 
 ### 4. Atomic Consume 如何实现？
 

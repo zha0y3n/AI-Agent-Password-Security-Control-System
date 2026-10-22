@@ -39,6 +39,8 @@ type idemRecord struct {
 // Mock 是内存中的 Mock Git + Mock DB 服务。
 type Mock struct {
 	tokens map[string]string // service -> 期望的 Credential
+	// RequireClientCert 为 true 时，受保护接口要求 TLS 连接上有已验证的客户端证书。
+	RequireClientCert bool
 
 	mu    sync.Mutex
 	repos map[string]map[string]string // repo -> path -> content
@@ -108,6 +110,15 @@ func (m *Mock) Handler() http.Handler {
 // auth 校验 Authorization: Bearer <credential>，比较使用常量时间。
 func (m *Mock) auth(service string, next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		// 网络隔离：开启后受保护接口只接受出示受信客户端证书（即 Broker）的连接，
+		// 拿到 Credential 的其他人也无法直接调用。/stats、/reset、/health 是实验接口，不受影响。
+		if m.RequireClientCert && (r.TLS == nil || len(r.TLS.VerifiedChains) == 0) {
+			m.mu.Lock()
+			m.stats.AuthFailures++
+			m.mu.Unlock()
+			writeJSON(w, http.StatusForbidden, map[string]string{"error": "client certificate required"})
+			return
+		}
 		got, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer ")
 		want := m.tokens[service]
 		if !ok || want == "" || subtle.ConstantTimeCompare([]byte(got), []byte(want)) != 1 {

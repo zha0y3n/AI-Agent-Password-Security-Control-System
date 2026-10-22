@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/zha0y3n/AI-Agent-Password-Security-Control-System/credential-broker/internal/crypto"
@@ -49,6 +50,11 @@ type Config struct {
 	TLSCertFile     string
 	TLSKeyFile      string
 	TLSClientCAFile string
+
+	// 调用上游时的 TLS：UpstreamCAFile 替代系统信任库；客户端证书用于上游要求 mTLS 时。
+	UpstreamCAFile         string
+	UpstreamClientCertFile string
+	UpstreamClientKeyFile  string
 }
 
 // Load 读取并校验配置。
@@ -71,6 +77,10 @@ func Load() (*Config, error) {
 		TLSCertFile:     os.Getenv("BROKER_TLS_CERT_FILE"),
 		TLSKeyFile:      os.Getenv("BROKER_TLS_KEY_FILE"),
 		TLSClientCAFile: os.Getenv("BROKER_TLS_CLIENT_CA_FILE"),
+
+		UpstreamCAFile:         os.Getenv("BROKER_UPSTREAM_CA_FILE"),
+		UpstreamClientCertFile: os.Getenv("BROKER_UPSTREAM_CLIENT_CERT_FILE"),
+		UpstreamClientKeyFile:  os.Getenv("BROKER_UPSTREAM_CLIENT_KEY_FILE"),
 	}
 	var err error
 	if c.VaultKey, err = hex.DecodeString(os.Getenv("BROKER_VAULT_KEY")); err != nil || len(c.VaultKey) != crypto.SM4KeySize {
@@ -105,6 +115,13 @@ func Load() (*Config, error) {
 	}
 	if c.TLSClientCAFile != "" && c.TLSCertFile == "" {
 		return nil, fmt.Errorf("BROKER_TLS_CLIENT_CA_FILE requires BROKER_TLS_CERT_FILE and BROKER_TLS_KEY_FILE")
+	}
+	if (c.UpstreamClientCertFile == "") != (c.UpstreamClientKeyFile == "") {
+		return nil, fmt.Errorf("BROKER_UPSTREAM_CLIENT_CERT_FILE and BROKER_UPSTREAM_CLIENT_KEY_FILE must be set together")
+	}
+	if (c.UpstreamCAFile != "" || c.UpstreamClientCertFile != "") && !strings.HasPrefix(c.UpstreamURL, "https://") {
+		// 明文 HTTP 上配置 TLS 会悄悄丢掉服务端认证与客户端证书
+		return nil, fmt.Errorf("BROKER_UPSTREAM_* TLS settings require an https:// BROKER_UPSTREAM_URL")
 	}
 	switch v := os.Getenv("BROKER_ENABLE_RESET"); v {
 	case "", "0", "false":

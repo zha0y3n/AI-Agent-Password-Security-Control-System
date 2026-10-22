@@ -3,6 +3,7 @@ package upstream
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -45,6 +46,17 @@ type Client struct {
 // NewClient 创建 Client。
 func NewClient(baseURL string, timeout time.Duration) *Client {
 	return &Client{base: baseURL, http: &http.Client{Timeout: timeout}}
+}
+
+// NewTLSClient 创建使用指定 TLS 配置（自定义 CA、客户端证书）的 Client；tlsCfg 为 nil 时等同 NewClient。
+func NewTLSClient(baseURL string, timeout time.Duration, tlsCfg *tls.Config) *Client {
+	c := NewClient(baseURL, timeout)
+	if tlsCfg != nil {
+		tr := http.DefaultTransport.(*http.Transport).Clone()
+		tr.TLSClientConfig = tlsCfg
+		c.http.Transport = tr
+	}
+	return c
 }
 
 // Calls 返回累计调用次数，供测试断言“拒绝路径未调用上游”。

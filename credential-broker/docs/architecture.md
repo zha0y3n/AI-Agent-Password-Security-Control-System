@@ -259,4 +259,4 @@ Challenge 用来防止“同一份 Holder Proof 再提交一次”。Capability 
 | 每次拒绝都签一张 DENIED 回执 | 拒绝路径多一次 SM2 签名 | 视 C 的压测结果改为按需签发 |
 | 单机 SQLite | 写入串行，吞吐受限 | 线性化点的语义可以迁移到 PostgreSQL 的 `SELECT … FOR UPDATE` |
 | `POST /v1/admin/reset` | 会清空审计链 | 仅开发和实验环境开启（`BROKER_ENABLE_RESET`） |
-| Mock 服务可从本机直接访问 | 没有 Credential 只会返回 401，但生产环境需要网络隔离 | 上游只接受来自 Broker 的连接（mTLS 或网络策略） |
+| Mock 服务默认可从本机直接访问 | 没有 Credential 只会返回 401；开启 `MOCK_TLS_CLIENT_CA_FILE` 后只接受 Broker 的客户端证书 | 真实上游需自身支持 mTLS 或依赖网络策略 |

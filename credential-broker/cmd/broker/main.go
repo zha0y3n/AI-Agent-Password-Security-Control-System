@@ -95,6 +95,10 @@ func run() error {
 		KeyNotBefore:     notBefore,
 		KeyNotAfter:      notBefore + int64(cfg.KeyValidity/time.Second),
 	}
+	upstreamTLS, err := cfg.UpstreamTLS()
+	if err != nil {
+		return fmt.Errorf("upstream TLS: %w", err)
+	}
 	var keys *protocol.ReloadableKeyRegistry
 	if cfg.RetiredKeysPath != "" {
 		if srv.RetiredKeys, err = api.LoadRetiredKeys(cfg.RetiredKeysPath, cfg.BrokerID, cfg.KeyID, signer.PublicKey()); err != nil {
@@ -127,7 +131,7 @@ func run() error {
 			})...),
 			Store:       store,
 			Credentials: credentials,
-			Upstream:    upstream.NewClient(cfg.UpstreamURL, cfg.UpstreamTimeout),
+			Upstream:    upstream.NewTLSClient(cfg.UpstreamURL, cfg.UpstreamTimeout, upstreamTLS),
 			Audit:       auditor,
 			Metrics:     m,
 			Receipts:    &receipt.Issuer{BrokerID: cfg.BrokerID, KeyID: cfg.KeyID, Signer: signer},
