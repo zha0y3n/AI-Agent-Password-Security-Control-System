@@ -1,69 +1,69 @@
-# evaluation-dashboard：安全评测与可视化（C）
+# evaluation-dashboard：安全评测与可视化
 
-C 模块负责用**独立实验**证明 A/B 的安全性质，而不是重复 A 的单元测试。当前完整度：**88%**。7 类实验脚本、7 份 CSV 结果和 7 Tab Dashboard 已提交；仍待从干净环境全量复现并补齐证据元数据。
+本模块对完整系统（AA + Broker + Mock 上游）做独立的系统级实验，并用 Dashboard 展示结果。每条实验记录都核对实际决策、是否读取了 Credential、上游真实副作用次数，不只看 HTTP 状态码。
 
 ## 目录
 
 ```text
-scripts/            7 类实验脚本 + 一键启动
+scripts/            7 类实验脚本 + 一键启动脚本
 tests/              pytest 基础用例（AA 签发接口）
-dashboard/          Streamlit Dashboard（读取 7 份 CSV）
+dashboard/          Streamlit Dashboard（读取 results/ 下的 7 份 CSV）
 contracts/          CSV 字段与跨模块数据约定
-results/            已提交的 7 份实验 CSV
-requirements.txt    C 的 Python 依赖
+results/            实验结果 CSV；reproductions/ 下为带环境元数据的复现记录
+requirements.txt    Python 依赖
 ```
 
-## 当前结果（2026-10-20）
+## 实验
 
-| 实验 | 文件 | 记录数 | 结果 | 关键结论 |
-|---|---|---:|---|---|
-| AA 签发攻击 | `results/security.csv` | 10 | 10/10 | 未知任务、换资源、篡改请求等均被拒绝，副作用 0 |
-| AA 验签攻击 | `results/verify.csv` | 10 | 10/10 | 签名/绑定/audience 篡改均被拒绝 |
-| Credential 生命周期 | `results/credential_lifecycle.csv` | 9 | 9/9 | 创建、重复创建、无 token、轮换/撤销等符合预期 |
-| 并发重放 | `results/concurrency.csv` | 15 | 15/15 | 10/50/100/200/500 并发，每轮最大副作用 1 |
-| 性能 | `results/performance.csv` | 12 | 12/12 | 1/10/50/100 并发吞吐、P50/P95/P99 |
-| 撤销竞态 | `results/revocation.csv` | 50 | 50/50 safe | `execute_allowed` 全为 false，副作用 0 |
-| 提示注入 | `results/prompt_injection.csv` | 4 | 4/4 | 任务外资源、篡改请求、伪造 Capability 均被拦截 |
+| 实验 | 脚本 | 结果文件 | 用例 | 通过条件 |
+|---|---|---|---|---|
+| AA 签发攻击 | `run_security_tests.py` | `security.csv` | 正常签发、未知任务、换资源/操作/路径/HTTP 方法、错误 Agent、未知 Agent 密钥、TTL 越界（10 条） | 攻击全部被 AA 拒绝，副作用为 0 |
+| Capability 验签攻击 | `run_verify_tests.py` | `verify.csv` | 篡改签名、audience 错误、Agent/Task/Resource/Operation/Credential 绑定不一致、请求哈希不一致、过期（10 条） | 篡改与绑定错误全部被拒绝 |
+| Credential 生命周期 | `run_credential_lifecycle_tests.py` | `credential_lifecycle.csv` | 创建、重复创建、无令牌创建、查询、轮换、撤销、重复撤销、查询不存在、审计记录（9 条） | 状态码与错误码符合预期 |
+| 并发重放 | `run_concurrency_tests.py` | `concurrency.csv` | 同一 Capability 并发提交 10/50/100/200/500 次，各 3 轮 | 每轮恰好 1 次成功，真实副作用 ≤ 1 |
+| 性能 | `run_performance_tests.py` | `performance.csv` | 并发 1/10/50/100，每轮 100 个独立 Capability，各 3 轮 | 全部执行成功；记录吞吐与 P50/P95/P99 |
+| 撤销竞态 | `run_revocation_tests.py` | `revocation.csv` | 执行与撤销并发，50 轮 | 每轮 `safe`：未读取 Credential、无副作用、执行被拒 |
+| 提示注入 | `run_prompt_injection_tests.py` | `prompt_injection.csv` | 任务外资源、签发后篡改请求、伪造 Capability | 全部被拦截，副作用为 0 |
 
-合计 **110 条记录，全部标记通过**。这些是 C 的已提交证据，不等于 A 的 pytest 结果，也不等于已经从零复现的最终结论。
+性能实验的时延只统计 `POST /v1/execute`（含 Broker 全部校验、原子消费、SM4 解密、上游调用、回执签名与审计写入）；吞吐按整轮墙钟时间计算，包含 AA 签发与 Holder Proof 生成。
 
-## 复现
+## 运行
 
-前置条件：`git`、`python3`（3.11+）、`go`、`curl`、`openssl`；端口 `8000/8080/9090` 空闲。
+前置条件：`python3`（3.11+）、`go`、`curl`、`openssl`；端口 `8000/8080/9090` 空闲。
 
 ```bash
-git clone https://github.com/zha0y3n/AI-Agent-Password-Security-Control-System.git
-cd AI-Agent-Password-Security-Control-System
 bash evaluation-dashboard/scripts/start_all_services.sh
 source .venv/bin/activate
 ```
 
-一键脚本会自动创建 `.venv`、安装 `requirements.txt` 和 A 的开发依赖、生成 `.runtime/` 与 B 的 `.env`、启动 AA/Broker/Mock，并灌入初始数据（`github-prod` 默认对齐 epoch 17）。Docker Compose 不是该脚本的必需项；如需容器化运行，见 B 的 `deploy/`。
+启动脚本会创建 `.venv`、安装 `requirements.txt` 与 `agent-aa`、生成 `.runtime/` 与 `credential-broker/.env`（随机 Vault 主密钥与管理令牌）、在后台启动 AA :8000、Mock :9090、Broker :8080，并录入初始数据（`github-prod` 为 epoch 17）。
 
-运行实验：
+> **注意**：脚本开始时会执行 `pkill -f agent-aa`、`pkill -f mock-upstream`、`pkill -f broker`、`pkill -f "go run"`，会结束本机所有命令行匹配这些字样的进程。请在专用环境中运行。
+
+依次运行实验：
 
 ```bash
 python evaluation-dashboard/scripts/run_security_tests.py
-sleep 1
 python evaluation-dashboard/scripts/run_verify_tests.py
-sleep 1
 python evaluation-dashboard/scripts/run_credential_lifecycle_tests.py
-sleep 1
 python evaluation-dashboard/scripts/run_concurrency_tests.py
-sleep 1
 python evaluation-dashboard/scripts/run_performance_tests.py
-sleep 1
 python evaluation-dashboard/scripts/run_revocation_tests.py
-sleep 1
 python evaluation-dashboard/scripts/run_prompt_injection_tests.py
 ```
 
-Dashboard：
+实验会覆盖 `results/` 下的同名 CSV。管理令牌从环境变量 `BROKER_ADMIN_TOKEN` 或 `credential-broker/.env` 读取。
+
+## Dashboard
 
 ```bash
 streamlit run evaluation-dashboard/dashboard/app.py --server.address 0.0.0.0
 # http://localhost:8501
 ```
+
+Dashboard 读取 `results/` 下的 7 份 CSV，分为 issue 测试、verify 测试、凭据生命周期、并发测试、性能测试、撤销竞态、提示注入 7 个 Tab，展示通过率与明细。
+
+也可以通过 Docker Compose 启动：`cd credential-broker/deploy && docker compose --profile dashboard up -d dashboard`。
 
 ## 结果字段
 
@@ -71,23 +71,23 @@ streamlit run evaluation-dashboard/dashboard/app.py --server.address 0.0.0.0
 
 - `case_id`、`category`、`expected_decision`、`actual_decision`；
 - `error_code`；
-- `credential_accessed`：是否读取了 Credential；
+- `credential_accessed`：Broker 是否读取了 Credential；
 - `side_effect_count`：上游真实副作用次数；
 - `passed`、`timestamp`。
 
 并发、性能、撤销实验另有 `concurrency`、`throughput_rps`、`p50_ms/p95_ms/p99_ms`、`safe` 等字段。完整定义见 [contracts/README.md](contracts/README.md)。
 
-## 已知问题与待办
+## 复现记录
 
-1. **干净环境复现**：当前 CSV 是已提交证据，仍需从干净环境重跑 7 类实验，并记录硬件、Go/Python 版本、启动顺序、CSV 生成时间。
-2. **历史 token 风险**：早期提交曾硬编码 `ADMIN_TOKEN`，当前脚本已改为从环境变量/`.env` 读取；如果该 token 在任何环境使用过，必须轮换。
-3. **依赖与端口**：`requirements.txt` 已声明依赖；`start_all_services.sh` 假设 `8000/8080/9090` 空闲。
-4. **Dashboard 口径**：7 个 Tab 已能读取 7 份 CSV，最终展示口径和答辩截图仍需 C 确认。
-5. **证据边界**：A 的 pytest 只是协议单元测试；C 的 CSV 也不是 A 的测试结果，二者都不能替代干净环境的全系统复现。
+复现时应记录硬件、操作系统、Go/Python 版本、启动顺序与 CSV 生成时间，并与原结果分目录存放。示例见 [results/reproductions/2026-10-21/README.md](results/reproductions/2026-10-21/README.md)。性能数据与硬件相关，不同机器之间不宜直接比较绝对值。
+
+## 证据边界
+
+- `passed` 由脚本按预期规则计算；
+- AA 的 pytest 是协议单元测试，Broker 的 `go test` 是单元与集成测试，本模块是系统实验，三者分别出具证据，不互相替代。
 
 ## 相关文档
 
 - [contracts/README.md](contracts/README.md)：CSV 字段定义
-- [../docs/c-progress.md](../docs/c-progress.md)：C 进度与证据
 - [../docs/threat-model.md](../docs/threat-model.md)：威胁模型
-- [../credential-broker/README.md](../credential-broker/README.md)：B 的实验支撑接口
+- [../credential-broker/README.md](../credential-broker/README.md#实验支撑接口)：Broker 的实验支撑接口

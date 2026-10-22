@@ -1,4 +1,4 @@
-# Credential Broker（B）
+# credential-broker：Credential Broker 与 Vault
 
 Broker 是系统里唯一的可信执行点。Agent 提交 **Execution Bundle**（AgentRequest + AA 签发的 Capability + Agent 的 Holder Proof）。Broker 逐项校验通过后，原子地消费 Capability，从 Vault 解密长期 Credential 调用受保护服务，最后签发 **Execution Receipt**。Agent 从头到尾拿不到 Credential。
 
@@ -10,38 +10,8 @@ Go 实现，国密原语来自 [`emmansun/gmsm`](https://github.com/emmansun/gms
 |---|---|
 | [docs/architecture.md](docs/architecture.md) | 设计说明：模块边界、执行时序、校验流水线顺序的理由、Atomic Consume 与线性化点、为什么不是严格 exactly-once、Vault 与 Epoch、Credential 明文出现的位置、回执、审计、密钥配置、已知限制 |
 | [docs/security-mapping.md](docs/security-mapping.md) | 威胁与防御对照：每类攻击被哪一步拦下、返回什么码、由哪个测试或演示证明 |
-| [docs/defense.md](docs/defense.md) | 答辩材料：六个必答题、常见追问、5 分钟演示流程 |
-| [../docs/audit-chain.md](../docs/audit-chain.md) | 审计哈希链与检查点的字节格式（供 C 独立验证） |
-
-## 完成度
-
-| 阶段 | 内容 | 状态 |
-|---|---|---|
-| 一：基础设施 | 国密封装、SQLite、SM4-GCM Vault、Credential 生命周期与 Epoch、原子消费、幂等、Mock 上游、审计哈希链、Challenge、埋点、Docker | 完成 |
-| 二：接入 A 的协议 | `ZTCANON-JSON-v1`、Request Hash、SM2 域分离验签（三组共享向量）、可信公钥表、校验流水线、`POST /v1/execute`、Receipt 签发（A 的 `ReceiptVerifier` 验过）、错误码与 HTTP 状态 | 完成；`result_envelope` 已固化进 `shared/` |
-| 三：A + B 联调 | 真实 HTTP 全链路：Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit；`e2e-demo.py` 的 7 类攻击样例全部按预期拒绝或幂等处理；`e2e-lifecycle.py` 的生命周期联调 25/25 | 完成 |
-| 四：面向 C 的支撑 | 副作用计数、Capability 状态查询、审计导出 / 复核、Broker 公钥记录、Metrics、状态重置、种子数据与批量 Credential、docker compose | 完成；接口是否够用待 C 确认 |
-| 五：竞赛化 | 设计说明、威胁与防御对照、答辩材料（见上方“文档”） | 文档完成；之后只修 Bug，不改协议 |
-
-**B 约 98%。** 剩下的是生产化项目：传输层改用国密 TLCP、真实上游的网络隔离、Vault 主密钥与管理令牌托管、多实例部署（目前单机 SQLite）。
-
-2026-10-21 补齐：
-
-- **A+B 生命周期真实联调**：A 的 `scripts/e2e-lifecycle.py` 对真实 Broker + Mock 进程 25/25（HTTP；HTTPS + Broker↔Mock mTLS 同样通过）。覆盖：签发与执行之间轮换；伪造 Status（未来 epoch、过期 epoch、撤销后仍称 ACTIVE）在执行时被拒；撤销后 AA 拒绝签发；Status 不可用；撤销与执行并发竞态 50 轮（35 轮先执行、15 轮先撤销），按审计链顺序核对全部可线性化。
-- **`result_envelope` 固化**：见下方“Execution Receipt”。
-- **统一错误码表**：[`docs/error-codes.md`](../docs/error-codes.md)，`internal/errcode/errcode_test.go` 守护。
-- **崩溃恢复**：启动时（开始监听之前）把停在 `CONSUMING` 的 Capability 改为 `FAILED`（`error_code=INTERNAL_ERROR`，审计事件 `capability.recover`），不重试。
-- **公钥**：`kill -HUP <broker>` 热加载 AA / Agent 公钥表（审计事件 `keys.reload`）；`BROKER_RETIRED_KEYS` 轮换 Broker Receipt 公钥并可标记 `REVOKED`。
-- **传输**：Broker HTTPS / mTLS；Broker↔Mock mTLS（Credential 泄露也无法绕过 Broker 直接调用 Mock）。
-- **审计条目**：`ZTCANON-JSON-v1` 编码，旧条目仍可复核。
-- **DENIED 回执**：实测开销不到请求延迟的 1%，保持始终签发。
-
-最近一次验证（2026-10-21）：
-
-- `go vet`、`gofmt` 无问题，`go test -race ./...` 全部通过。
-- `make interop` 通过：A 的 `ReceiptVerifier.verify_result()` 接受 Go 签发的回执与 `result_envelope`，篡改后的副本被拒绝。
-- 用重新构建的镜像在 compose 里跑 `e2e`，14 项检查全部通过；AA、Broker、Mock 的日志中查不到 Credential、管理员令牌或 Vault 主密钥。
-- C 的 7 类实验在干净副本上复现 110/110（`evaluation-dashboard/results/reproductions/2026-10-21/`）。
+| [docs/defense.md](docs/defense.md) | 设计问答：可信执行点、Credential 明文出现位置、原子消费、exactly-once 边界、回执签发方 |
+| [../docs/audit-chain.md](../docs/audit-chain.md) | 审计哈希链与检查点的字节格式（供第三方独立验证） |
 
 ## 快速开始
 
@@ -55,8 +25,8 @@ sh gen-env.sh                     # 生成 .env：随机 Vault 主密钥、管�
 docker compose up -d --build      # AA :8000、Broker :8080、Mock :9090，均只绑定 127.0.0.1
 docker compose run --rm e2e       # 全链路联调 + 攻击样例
 docker compose run --rm reset     # 两轮实验之间：清空 Broker / Mock 状态并重新 seed
-docker compose --profile dashboard up -d dashboard   # 可选：C 的 Dashboard :8501
-docker compose down -v            # 停止并删除全部卷（含生成的私钥）
+docker compose --profile dashboard up -d dashboard   # 可选：评测 Dashboard :8501
+docker compose --profile dashboard down -v   # 停止并删除全部卷（含生成的私钥）
 ```
 
 密钥分布：`aa-init` 在 `aa-runtime` 卷里生成 AA 与 Agent 的私钥，只有 `aa` 和 `e2e` 挂载这个卷。公钥表另外复制到 `trust` 卷，Broker 以只读方式挂载，看不到 AA 或 Agent 的私钥。
@@ -64,7 +34,7 @@ docker compose down -v            # 停止并删除全部卷（含生成的私�
 ### 本地运行
 
 ```bash
-# 仓库根目录：安装 A，并生成 A 的开发运行时（.runtime/，含测试私钥，已 gitignore）
+# 仓库根目录：安装 agent-aa，并生成 AA 的开发运行时（.runtime/，含测试私钥，已 gitignore）
 bash scripts/bootstrap.sh
 .venv/bin/agent-aa init-demo --directory .runtime
 bash scripts/run-a.sh &                                   # AA :8000
@@ -83,8 +53,9 @@ sh scripts/seed.sh                                        # 录入 github-prod�
 ```text
 1. 正常执行：Agent -> AA -> Broker -> Mock Git
   [PASS] Broker 执行成功  (HTTP 200 None)
-  [PASS] A 的 ReceiptVerifier 复核回执，result_hash 与 envelope 一致
-  ...
+  [PASS] A 的 ReceiptVerifier 复核回执，result_envelope 符合共享 schema 且被回执绑定
+  [PASS] 回执 outcome=SUCCESS 且绑定本 Capability  (SUCCESS)
+  [PASS] 结果来自 Mock Git
 2. 攻击样例
   [PASS] 原样重放整个 bundle  (HTTP 403 CHALLENGE_USED)
   [PASS] 同一 Capability + 新 Challenge：幂等返回同一回执，不再调用上游  (HTTP 200)
@@ -96,7 +67,7 @@ sh scripts/seed.sh                                        # 录入 github-prod�
 3. 证据
   [PASS] 上游只被调用一次（所有攻击都在 Credential 读取前被拒绝）  (git calls +1)
   [PASS] 上游没有收到错误 Credential
-  [PASS] 审计哈希链与检查点复核通过  (27 entries)
+  [PASS] 审计哈希链与检查点复核通过  (25 entries)
 ```
 
 ## 执行流程
@@ -106,7 +77,7 @@ Agent ── POST /v1/challenge ────────────────
 Agent ── POST /v1/execute  {request, capability, holder_proof}
            │
            ▼  校验流水线（internal/verifier，任一步拒绝即停止）
-           1 schema                严格 ZTCANON-JSON-v1 + A 的 schema，拒绝未知字段 / 浮点 / 重复 key
+           1 schema                严格 ZTCANON-JSON-v1 + 共享 schema，拒绝未知字段 / 浮点 / 重复 key
            2 capability_signature  可信 issuer、issuer 公钥（用途 / 主体 / 有效期 / 状态）、SM2 验签
            3 capability_validity   issued_at / expires_at（±5s 时钟偏差）、audience = 本 Broker
            4 request_binding       Agent/Task/Service/Resource/Operation/Credential ID 逐项一致，重算 SM3 请求摘要
@@ -129,7 +100,7 @@ Agent ── POST /v1/execute  {request, capability, holder_proof}
 |---|---|---|---|
 | GET | `/health` | 公开 | 健康检查 |
 | GET | `/v1/broker/public-key` | 公开 | Receipt 签名公钥（`public_key` 为 04‖X‖Y hex、`public_key_pem`、`key_record`），以及审计检查点公钥 `checkpoint_key` |
-| GET | `/v1/broker/key-registry` | 公开 | A 的 `KeyRegistryDocument` 格式，可直接交给 `agent_aa.keys.KeyRegistry` 验 Receipt |
+| GET | `/v1/broker/key-registry` | 公开 | agent-aa 的 `KeyRegistryDocument` 格式，可直接交给 `agent_aa.keys.KeyRegistry` 验 Receipt |
 | POST | `/v1/challenge` | 公开 | `{"agent_id"}` → `{challenge, agent_id, audience, expires_at}` |
 | POST | `/v1/execute` | 公开 | 请求体为 Execution Bundle，见下文 |
 | GET | `/v1/capabilities/{id}` | 管理员 | Capability 消费状态：`ISSUED / CONSUMING / CONSUMED / FAILED`、`error_code` |
@@ -149,16 +120,16 @@ Agent ── POST /v1/execute  {request, capability, holder_proof}
 
 Mock 上游（`:9090`）：`GET|PUT /git/repos/{repo}/files/{path}`、`POST /db/{db}/query|update`（都要求 Credential），`GET /stats`、`POST /reset`。
 
-### A/B Credential Status 契约
+### Credential Status 契约
 
-A 的 `BROKER_LIVE` 模式会在签发前读取：
+AA 的 `BROKER_LIVE` 模式会在签发前读取：
 
 ```text
 GET /v1/credentials/{credential_id}/status
 Accept: application/json
 ```
 
-B 返回的 `Info` 字段与 `shared/schemas/credential-status.schema.json` 一致：
+Broker 返回的 `Info` 字段与 `shared/schemas/credential-status.schema.json` 一致：
 
 ```json
 {
@@ -172,9 +143,9 @@ B 返回的 `Info` 字段与 `shared/schemas/credential-status.schema.json` 一�
 ```
 
 - 该端点只返回非秘密生命周期元数据，不返回密文或明文；
-- A 的失败关闭错误码：`CREDENTIAL_STATUS_UNAVAILABLE`、`CREDENTIAL_STATUS_INVALID`、`CREDENTIAL_STATUS_MISMATCH`、`CREDENTIAL_INACTIVE`；
-- B 的执行期错误码：`CREDENTIAL_EPOCH_MISMATCH`、`CREDENTIAL_INACTIVE`；
-- A 的预检查不替代 B 在执行事务内的原子检查；轮换/撤销竞态仍由 B 的线性化点裁决。
+- AA 的失败关闭错误码：`CREDENTIAL_STATUS_UNAVAILABLE`、`CREDENTIAL_STATUS_INVALID`、`CREDENTIAL_STATUS_MISMATCH`、`CREDENTIAL_INACTIVE`；
+- Broker 的执行期错误码：`CREDENTIAL_EPOCH_MISMATCH`、`CREDENTIAL_INACTIVE`；
+- AA 的预检查不替代 Broker 在执行事务内的原子检查；轮换/撤销竞态仍由 Broker 的线性化点裁决。
 
 ### `POST /v1/execute`
 
@@ -215,11 +186,11 @@ B 返回的 `Info` 字段与 `shared/schemas/credential-status.schema.json` 一�
 | 500 | `INTERNAL_ERROR`（如 Challenge 存储不可用，同样拒绝） |
 | 503 | `EXECUTION_DISABLED`（未配置 `BROKER_TRUSTED_ISSUER` / `BROKER_KEY_REGISTRY`） |
 
-协议类错误码沿用 A 的 `errors.py`。生命周期、重放和上游类错误码是 B 扩展的，定义在 `internal/errcode`。
+协议类错误码沿用 `agent_aa.errors`。生命周期、重放和上游类错误码由 Broker 扩展，定义在 `internal/errcode`。
 
 ### Execution Receipt
 
-- **签名**：`SM2-with-SM3(Broker 私钥, "AACRED"‖0‖"EXECUTION_RECEIPT"‖0‖"v1"‖0‖ZTCANON(body))`，DER 编码后转 base64url，UID 为 `1234567812345678`。与 `docs/crypto-protocol.md` §3 一致，A 的 `ReceiptVerifier` 可以直接验签。
+- **签名**：`SM2-with-SM3(Broker 私钥, "AACRED"‖0‖"EXECUTION_RECEIPT"‖0‖"v1"‖0‖ZTCANON(body))`，DER 编码后转 base64url，UID 为 `1234567812345678`。与 `docs/crypto-protocol.md` §3 一致，agent-aa 的 `ReceiptVerifier` 可以直接验签。
 - **公钥**：`GET /v1/broker/key-registry`，用途 `RECEIPT_SIGNING`，主体为 `broker_id`。`not_before` 取签名密钥文件的修改时间，所以重启后旧回执仍然在有效期内。
 - **何时签发**：
 
@@ -247,13 +218,13 @@ B 返回的 `Info` 字段与 `shared/schemas/credential-status.schema.json` 一�
   }
   ```
 
-  调用方复核：A 的 `ReceiptVerifier.verify_result()` 依次验签、重算 `result_hash`、比对 `capability_id` / `request_hash` / `outcome`。`scripts/verify-a-receipt.py` 和 `scripts/e2e-demo.py` 都用它复核真实 Broker 的输出。
+  调用方复核：agent-aa 的 `ReceiptVerifier.verify_result()` 依次验签、重算 `result_hash`、比对 `capability_id` / `request_hash` / `outcome`。`scripts/verify-a-receipt.py` 和 `scripts/e2e-demo.py` 都用它复核真实 Broker 的输出。
 
-## 面向 C 的实验支撑
+## 实验支撑接口
 
-C 的实验记录字段（`evaluation-dashboard/contracts/README.md`）可以从这些接口取得：
+评测实验的记录字段（`evaluation-dashboard/contracts/README.md`）可以从这些接口取得：
 
-| C 字段 | 来源 |
+| 实验字段 | 来源 |
 |---|---|
 | `actual_decision` / `error_code` | `/v1/execute` 响应的 `decision.allowed` / `decision.code` |
 | `credential_accessed` | `/v1/execute` 响应的 `credential_loaded` |
@@ -286,10 +257,10 @@ sh scripts/reset.sh                   # 清空 Broker（Credential、Capability�
 | `BROKER_ADMIN_TOKEN` | **必填** | ≥16 字符：`openssl rand -hex 24` |
 | `BROKER_KEY_ID` | `broker-key-01` | Receipt 签名公钥标识 |
 | `BROKER_KEY_VALIDITY` | `8760h` | 公钥记录有效期 |
-| `BROKER_RETIRED_KEYS` | 空 | 以前的 Receipt 签名公钥（A 的 `KeyRegistryDocument` 格式），与当前公钥一起发布；见下方“轮换 Broker 签名密钥” |
-| `BROKER_TRUSTED_ISSUER` | 空 | 唯一信任的 AA issuer（A 开发运行时为 `aa-demo-01`） |
-| `BROKER_KEY_REGISTRY` | 空 | AA / Agent 公钥表（A 运行时的 `public-keys.json`）；和上一项必须同时设置，否则 `/v1/execute` 返回 503 |
-| `BROKER_CLOCK_SKEW` | `5s` | 只放宽“签发时间在未来”的判断，和 A 的参考校验器一致 |
+| `BROKER_RETIRED_KEYS` | 空 | 以前的 Receipt 签名公钥（agent-aa 的 `KeyRegistryDocument` 格式），与当前公钥一起发布；见下方“轮换 Broker 签名密钥” |
+| `BROKER_TRUSTED_ISSUER` | 空 | 唯一信任的 AA issuer（AA 开发运行时为 `aa-demo-01`） |
+| `BROKER_KEY_REGISTRY` | 空 | AA / Agent 公钥表（AA 运行时的 `public-keys.json`）；和上一项必须同时设置，否则 `/v1/execute` 返回 503 |
+| `BROKER_CLOCK_SKEW` | `5s` | 只放宽“签发时间在未来”的判断，和 AA 的参考校验器一致 |
 | `BROKER_CHALLENGE_TTL` | `60s` | Challenge 有效期 |
 | `BROKER_CHECKPOINT_EVERY` | `100` | 每 N 条审计记录自动生成签名检查点（0 关闭） |
 | `BROKER_UPSTREAM_URL` | `http://127.0.0.1:9090` | 受保护服务地址 |
@@ -322,7 +293,7 @@ export BROKER_SIGNING_KEY_FILE=data/broker-sm2-02.key BROKER_KEY_ID=broker-key-0
 make test          # 全部单元 / 集成测试
 make test-race     # 带竞态检测（并发重放 / 撤销竞态）
 make vet
-make interop       # 跨语言：A 的 Python 代码签发 bundle → Go 执行并签发 Receipt → A 的 ReceiptVerifier 复核
+make interop       # 跨语言：agent-aa 签发 bundle → Go 执行并签发 Receipt → agent-aa 的 ReceiptVerifier 复核
 ```
 
 覆盖范围包括：
@@ -351,7 +322,7 @@ internal/api          HTTP 接口（execute.go：执行、公钥记录、Capabil
 internal/verifier     校验流水线（steps.go）与请求映射（plan.go）
 internal/execution    可信执行路径：消费 → 解密 → 上游 → 回执
 internal/receipt      Execution Receipt 与 result_envelope
-internal/protocol     A 协议对象的 Go 严格实现、请求摘要、SM2 域分离签名、可信公钥表
+internal/protocol     共享协议对象的 Go 严格实现、请求摘要、SM2 域分离签名、可信公钥表
 internal/canonical    ZTCANON-JSON-v1 严格解析与编码
 internal/capability   原子消费、重放防护、幂等
 internal/credential   Credential 生命周期与 Epoch
@@ -359,18 +330,18 @@ internal/vault        SM4-GCM Vault
 internal/challenge    Broker Challenge
 internal/evidence     SM3 审计哈希链 + SM2 检查点
 internal/upstream     Mock 服务与上游客户端
-internal/errcode      B 扩展错误码与 HTTP 状态映射
+internal/errcode      Broker 扩展错误码与 HTTP 状态映射
 scripts/              seed / reset、跨语言联调（gen-a-bundle.py、verify-a-receipt.py）、全链路演示（e2e-demo.py）
 deploy/               docker-compose.yml、AA / Dashboard 镜像、gen-env.sh
-docs/                 设计说明、威胁与防御对照、答辩材料
+docs/                 设计说明、威胁与防御对照、设计问答
 ```
 
 ## 已知限制
 
-- **Credential Epoch 来源**：A 默认 `STATIC_DEMO` 仍把 epoch 写死为 17；A 已实现可选的 `BROKER_LIVE`，通过 `GET /v1/credentials/{id}/status` 获取实时 epoch。A+B 生命周期联调（轮换、撤销、Status 不可用/伪造、撤销竞态）已对真实进程完成；`seed.sh` 仍把 `github-prod` 轮换到 17 以兼容默认演示。B 执行事务内的 `ACTIVE + epoch` 检查仍是最终线性化点。
-- **错误码与 HTTP 状态码**：全部错误码已合并进统一错误码表 [`docs/error-codes.md`](../docs/error-codes.md)，`internal/errcode/errcode_test.go` 与 A 的 `test_error_codes_doc.py` 会在出现未登记的错误码时失败。HTTP 状态按接口映射：A 的参考验签接口返回 401，Broker 对同一错误码返回 403；Challenge 方面 Broker 细分为 5 个码，A 的参考校验器只有 `CHALLENGE_MISMATCH`。以错误码为准，C 的实验脚本无需改动。
+- **Credential Epoch 来源**：AA 默认 `STATIC_DEMO` 把 epoch 固定为 17，`seed.sh` 相应地把 `github-prod` 轮换到 17；生产应启用 AAA 的 `BROKER_LIVE`，通过 `GET /v1/credentials/{id}/status` 读取实时 epoch。无论哪种模式，Broker 执行事务内的 `ACTIVE + epoch` 检查都是最终线性化点。
+- **错误码与 HTTP 状态码**：全部错误码已合并进统一错误码表 [`docs/error-codes.md`](../docs/error-codes.md)，`internal/errcode/errcode_test.go` 与 agent-aa 的 `test_error_codes_doc.py` 会在出现未登记的错误码时失败。HTTP 状态按接口映射：AA 的参考验签接口返回 401，Broker 对同一错误码返回 403；Challenge 方面 Broker 细分为 5 个码，AA 的参考校验器只有 `CHALLENGE_MISMATCH`。调用方应以错误码为准。
 - **从旧版本升级**：检查点改用独立密钥后，旧数据库中由 Receipt 密钥签的检查点无法通过 `/v1/audit/verify`。开发 / 实验环境请执行一次 `reset`。
-- **DENIED 回执**：只为已验签的 Capability 签发，每次拒绝多一次 SM2 签名。实测（`go test -bench . ./internal/receipt/`，Ryzen 9 8945HX）签一张 DENIED 回执约 0.036 ms，而能拿到回执的拒绝之前至少已做过一次约 0.049 ms 的 Capability 验签；C 测得单并发 ALLOW 路径 P50 约 4.7 ms。开销不到 1%，因此保持始终签发。
+- **DENIED 回执**：只为已验签的 Capability 签发，每次拒绝多一次 SM2 签名。实测（`go test -bench . ./internal/receipt/`，Ryzen 9 8945HX）签一张 DENIED 回执约 0.036 ms，而能拿到回执的拒绝之前至少已做过一次约 0.048 ms 的 Capability 验签；单并发 ALLOW 路径 P50 为数毫秒。开销约为请求延迟的 1%，因此保持始终签发。
 - **外部 API 成功但状态未落盘**：上游已执行而 Broker 写库前崩溃时，Capability 会停在 `CONSUMING`。重启时 Broker 把它们改为 `FAILED`，之后的提交返回 `CAPABILITY_ALREADY_FAILED`，不会重复执行；Agent 需要重新申请 Capability（新 Capability 的幂等键不同，上游无法去重）。恢复只在启动时进行，前提是同一数据库只有一个 Broker 进程。
 - **公钥轮换**：AA / Agent 公钥表可以用 `SIGHUP` 热加载。Broker 自己的 Receipt 密钥通过 `BROKER_RETIRED_KEYS` 轮换（旧公钥继续发布，泄露的标记为 `REVOKED`），但需要重启 Broker。审计检查点密钥换了以后，旧检查点无法用新公钥复核，换之前应先导出并保存旧公钥。
 - **传输层算法**：TLS 使用 Go 标准库（ECDSA / RSA 证书），不是国密 TLCP；协议层的签名与摘要仍是 SM2 / SM3。

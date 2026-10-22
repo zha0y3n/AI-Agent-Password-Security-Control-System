@@ -1,8 +1,6 @@
-# agent-aa：Agent + Authorization Authority（A）
+# agent-aa：Agent 与 Authorization Authority
 
-A 模块负责“把用户任务变成明确请求，并签发一张只能用于该任务、该 Agent、该 Broker、该 Credential 版本的一次性授权票据”。A 不实现 Broker/Vault，也不持有目标业务长期 Credential。
-
-当前完整度：**95%**（A 范围实现完成，P0 硬化已补；与真实 B 的生命周期联调仍待进行）。
+本模块把用户任务变成明确请求，并签发一张只能用于该任务、该 Agent、该 Broker、该 Credential 版本的一次性授权票据（Capability）。模块不实现 Broker 与 Vault，也不持有目标业务的长期 Credential。
 
 ## 组件
 
@@ -11,12 +9,12 @@ agent.py       固定任务 Agent：生成确定性 AgentRequest
 policy.py      服务端可信 TaskStore + 精确匹配授权策略
 authority.py   Capability 签发与 Python 参考验签
 holder.py      Holder Proof 生成/校验
-receipt.py     Execution Receipt 结构与参考验签
+receipt.py     Execution Receipt 结构与参考验签（含 result_envelope 绑定）
 models.py      严格 Pydantic 协议模型
 canonical.py   ZTCANON-JSON-v1
 crypto.py      铜锁 SM2/SM3 封装
 lifecycle.py   Broker Credential Status 失败关闭查询
-runtime.py     开发运行目录与 STATIC_DEMO / BROKER_LIVE 配置
+runtime.py     运行目录与 STATIC_DEMO / BROKER_LIVE 配置
 api.py         FastAPI 接口
 cli.py         init-demo / runtime-demo / demo / serve
 ```
@@ -28,10 +26,11 @@ cli.py         init-demo / runtime-demo / demo / serve
   → DeterministicAgent 生成 AgentRequest
   → AA 从服务端 TaskStore 读取 TaskContext
   → 策略精确匹配 AllowedAction
-  → （可选）查询 Broker 当前 ACTIVE Credential epoch
+  → （BROKER_LIVE）查询 Broker 当前 ACTIVE Credential epoch
   → 构造 CapabilityBody 并用 AA SM2 私钥签名
-  → Agent 用 Holder 私钥生成 Holder Proof
-  → 交给 Broker 校验
+  → Agent 向 Broker 申请 Challenge，用 Holder 私钥生成 Holder Proof
+  → 提交 Execution Bundle 给 Broker
+  → ReceiptVerifier.verify_result() 验证 Broker 回执与结果绑定
 ```
 
 Capability 绑定：Agent/Key、Task、Service、Resource、Operation、RequestHash、Audience、Credential ID/Epoch、TTL、Nonce、`one_time=true`。
@@ -45,11 +44,11 @@ Holder Proof 绑定：Capability 哈希、实际请求哈希、Broker Audience�
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e './agent-aa[dev]'
-.venv/bin/pytest agent-aa/tests -q     # 79 passed
-.venv/bin/agent-aa demo                # verified: true
+.venv/bin/pytest agent-aa/tests -q
+.venv/bin/agent-aa demo                # 输出 verified: true
 ```
 
-若 PyPI 默认镜像不可达，可显式指定镜像：
+若 PyPI 默认源不可达，可显式指定镜像：
 
 ```bash
 .venv/bin/pip install -i https://mirrors.aliyun.com/pypi/simple -e './agent-aa[dev]'
@@ -64,7 +63,7 @@ python3 -m venv .venv
 bash scripts/run-a.sh
 ```
 
-`init-demo` 会在 gitignored 的 `.runtime/` 中生成 AA/Agent 私钥、公钥表和可信任务库。私钥文件会尝试设为 `0600`；Windows/WSL 挂载盘可能仍报告 `0777`，此时 CLI 会告警。生产环境必须改用 Linux 访问控制、Secret Manager 或 HSM/独立签名器。
+`init-demo` 在 gitignored 的 `.runtime/` 中生成 AA/Agent 私钥、公钥表和可信任务库。私钥文件会尝试设为 `0600`；Windows/WSL 挂载盘可能仍报告 `0777`，此时 CLI 会告警。生产环境必须改用 Linux 访问控制、Secret Manager 或 HSM/独立签名器，并将 AA 与 Agent 私钥隔离在不同进程或主机。AA `serve` 不加载 Agent 私钥。
 
 接口：
 
@@ -76,15 +75,15 @@ bash scripts/run-a.sh
 | POST | `/v1/capabilities/verify` | Python 参考验签（正式校验点是 Broker） |
 | POST | `/v1/receipts/verify` | Broker Receipt 验签 |
 
-完整字段与校验顺序见 [../docs/a-b-interface.md](../docs/a-b-interface.md)。
+请求体上限 1 MiB，深层嵌套 JSON 返回 400。完整字段与校验顺序见 [../docs/a-b-interface.md](../docs/a-b-interface.md)。
 
 ## Credential Epoch 的两种模式
 
 ### STATIC_DEMO（默认）
 
-`init-demo` 生成 `STATIC_DEMO` 配置，可信任务中的 `credential_epoch=17` 固定不变，便于没有 Broker 的 A 端演示。**生产签发不得依赖固定 epoch。**
+`init-demo` 生成 `STATIC_DEMO` 配置，可信任务中的 `credential_epoch=17` 固定不变，用于不连接 Broker 的本地演示。**生产签发不得依赖固定 epoch。**
 
-### BROKER_LIVE（可选）
+### BROKER_LIVE
 
 部署时把 `.runtime/config.json` 改为：
 
@@ -107,7 +106,7 @@ bash scripts/run-a.sh
 - `broker_status_ca_file`：用部署 CA 代替系统信任库校验 Broker 证书；
 - `broker_status_client_cert_file` / `broker_status_client_key_file`：Broker 开启 mTLS（`BROKER_TLS_CLIENT_CA_FILE`）时出示的 AA 客户端证书，必须同时设置。
 
-任一文件无法加载、证书与私钥只配了一个、或者在 HTTP 端点上配置 TLS 字段，AA 都会拒绝启动。
+任一文件无法加载、证书与私钥只配了一个、或者在 HTTP 端点上配置 TLS 字段，AA 都会拒绝启动。所有活跃任务的 audience 都必须配置 Status 端点。
 
 AA 只在 AgentRequest 已完整匹配服务端 `AllowedAction` 后，查询该 audience 对应的：
 
@@ -142,35 +141,30 @@ Accept: application/json
 
 ## 测试覆盖
 
-`79 passed` 覆盖：
-
 - Canonical JSON、SM3 已知答案、SM2 正常/篡改、非法 DER；
 - 正常签发、错误资源/Body/Task、TTL、过期、跨任务/服务/资源/操作/路径；
 - RequestHash、Audience、Wrong Holder、Challenge、Proof 过期；
-- Receipt 篡改/验签 API；
+- Receipt 篡改、`result_envelope` 绑定（`RESULT_BINDING_MISMATCH`）、验签 API；
 - Broker Status 查询的 mTLS：受信客户端证书成功；无证书、非受信 CA 的客户端证书、非受信服务端证书均失败关闭；TLS 配置错误在启动时拒绝；
 - `BROKER_LIVE` 实时 epoch 绑定、撤销状态拒绝、HTTP/响应/身份错误失败关闭；
 - 真实本地 HTTP Status：重定向、超过 16 KiB、超时、坏状态行、截断响应、非 200、ID 不一致、非 ACTIVE；
-- `BROKER_LIVE` 经 `/v1/capabilities/issue` 的成功路径、`STATIC_DEMO` 不查询 Broker、TTL 拒绝先于查询；
-- `BROKER_LIVE` 启动校验：活跃 audience 必须配置端点，已取消任务不阻塞启动；
+- `BROKER_LIVE` 经 `/v1/capabilities/issue` 的成功路径、`STATIC_DEMO` 不查询 Broker、TTL 拒绝先于查询、先授权后查询；
 - AA 请求体 1 MiB 上限、深层嵌套 JSON 返回 400 而非 500；
-- 先授权后查询、HTTP 开发环境显式 opt-in；
-- Capability/Holder Proof/Receipt 三类共享向量。
+- 错误码表守护：返回的每个错误码都已在 `docs/error-codes.md` 登记；
+- Capability、Holder Proof、Receipt 与 `result_envelope` 共享向量。
 
-真实 B 联调使用 [`scripts/e2e-lifecycle.py`](../scripts/e2e-lifecycle.py)，覆盖 ACTIVE 签发、轮换后旧 Capability 拒绝、撤销后拒绝签发、Status 不可用失败关闭。
+与真实 Broker 的联调使用 [`scripts/e2e-lifecycle.py`](../scripts/e2e-lifecycle.py)：ACTIVE 签发与执行、轮换后旧 Capability 被拒、伪造 Status 在执行时被拒、撤销后拒绝签发、Status 不可用失败关闭、撤销与执行竞态可线性化、审计条目规范化校验。
 
 ## 限制
 
-- 不接入真实 LLM，使用固定任务 Agent；
-- 文件型私钥只用于本地演示，生产应使用 HSM/Secret Manager/独立 Holder Signer；
-- 不实现 Broker 的 Vault、原子消费、Challenge 存储或系统实验；
-- 与真实 B 的 TLS/mTLS 生命周期联调尚未完成；
-- `result_envelope` 与统一错误码表仍需 A/B/C 联审。
+- 使用固定任务 Agent，不接入 LLM；
+- 文件型私钥只用于本地演示，生产应使用 HSM、Secret Manager 或独立 Holder Signer；
+- 本模块只提供 Capability、Holder Proof 与 Receipt 的参考验签；Vault、原子消费与 Challenge 存储由 Broker 实现；
+- “零接触”指长期业务 Credential 对 Agent 零接触，Agent 自身仍持有 Holder 私钥。
 
 ## 相关文档
 
-- [../docs/a-b-interface.md](../docs/a-b-interface.md)：A→B 接口
+- [../docs/a-b-interface.md](../docs/a-b-interface.md)：AA → Broker 接口
 - [../docs/crypto-protocol.md](../docs/crypto-protocol.md)：字节级密码协议
-- [../docs/error-codes.md](../docs/error-codes.md)：A/B/C 统一错误码表
-- [../docs/a-progress.md](../docs/a-progress.md)：A 进度
+- [../docs/error-codes.md](../docs/error-codes.md)：统一错误码表
 - [../shared/README.md](../shared/README.md)：共享 Schema 与向量
