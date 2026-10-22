@@ -95,7 +95,7 @@ B 验签成功后仍必须原子消费 Challenge。仅比较 Challenge 字符串
 result_hash = lowercase_hex(SM3(ZTCANON-JSON-v1(result_envelope)))
 ```
 
-B/C 需要另行固化 `result_envelope` 的 schema；在此之前不要把任意业务 JSON 宣称为跨语言稳定结果。
+`result_envelope` 的结构见 `shared/schemas/result-envelope.schema.json`（权威模型 `agent_aa.models.ResultEnvelope`），字段、Receipt 签发规则与幂等重放语义见 `shared/README.md`，跨语言向量见 `shared/test-vectors/result-envelope-v1.json`。验证方用 `ReceiptVerifier.verify_result()` 同时核对签名与结果绑定。
 
 ## 7. 测试向量
 

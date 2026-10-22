@@ -1,0 +1,114 @@
+{
+  "protocol_version": "1.0",
+  "description": "result_hash = lowercase_hex(SM3(ZTCANON-JSON-v1(result_envelope)))",
+  "capability_id": "cap_7f3c2a91d4e8b6051a2c3d4e5f607182",
+  "request_hash": "9b1c6e0f4a5d3e2b7c8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c",
+  "vectors": [
+    {
+      "name": "success",
+      "input": {
+        "outcome": "SUCCESS",
+        "code": null,
+        "upstream_status": 200,
+        "upstream_body_raw": "{\"repo\":\"course-project\",\"path\":\"README.md\",\"content\":\"hello\"}"
+      },
+      "envelope": {
+        "capability_id": "cap_7f3c2a91d4e8b6051a2c3d4e5f607182",
+        "code": null,
+        "outcome": "SUCCESS",
+        "protocol_version": "1.0",
+        "request_hash": "9b1c6e0f4a5d3e2b7c8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c",
+        "upstream_body": {
+          "content": "hello",
+          "path": "README.md",
+          "repo": "course-project"
+        },
+        "upstream_status": 200
+      },
+      "canonical_hex": "7b226361706162696c6974795f6964223a226361705f3766336332613931643465386236303531613263336434653566363037313832222c22636f6465223a6e756c6c2c226f7574636f6d65223a2253554343455353222c2270726f746f636f6c5f76657273696f6e223a22312e30222c22726571756573745f68617368223a2239623163366530663461356433653262376338613966306531643263336234613566366537643863396230613166326533643463356236613766386539643063222c22757073747265616d5f626f6479223a7b22636f6e74656e74223a2268656c6c6f222c2270617468223a22524541444d452e6d64222c227265706f223a22636f757273652d70726f6a656374227d2c22757073747265616d5f737461747573223a3230307d",
+      "result_hash": "cea486302f4595b33829d271a2c8c024d4a841d9926d6844f40d50e56e4eca83"
+    },
+    {
+      "name": "upstream_rejected",
+      "input": {
+        "outcome": "ERROR",
+        "code": "UPSTREAM_REJECTED",
+        "upstream_status": 404,
+        "upstream_body_raw": "{\"error\":\"not found\"}"
+      },
+      "envelope": {
+        "capability_id": "cap_7f3c2a91d4e8b6051a2c3d4e5f607182",
+        "code": "UPSTREAM_REJECTED",
+        "outcome": "ERROR",
+        "protocol_version": "1.0",
+        "request_hash": "9b1c6e0f4a5d3e2b7c8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c",
+        "upstream_body": {
+          "error": "not found"
+        },
+        "upstream_status": 404
+      },
+      "canonical_hex": "7b226361706162696c6974795f6964223a226361705f3766336332613931643465386236303531613263336434653566363037313832222c22636f6465223a22555053545245414d5f52454a4543544544222c226f7574636f6d65223a224552524f52222c2270726f746f636f6c5f76657273696f6e223a22312e30222c22726571756573745f68617368223a2239623163366530663461356433653262376338613966306531643263336234613566366537643863396230613166326533643463356236613766386539643063222c22757073747265616d5f626f6479223a7b226572726f72223a226e6f7420666f756e64227d2c22757073747265616d5f737461747573223a3430347d",
+      "result_hash": "58b66f019d4194a88d84fdde27fde49c5d470b486252c94117d43a7367db6cf1"
+    },
+    {
+      "name": "non_canonical_upstream_body",
+      "input": {
+        "outcome": "ERROR",
+        "code": "UPSTREAM_ERROR",
+        "upstream_status": 502,
+        "upstream_body_raw": "{\"latency\":1.5}"
+      },
+      "envelope": {
+        "capability_id": "cap_7f3c2a91d4e8b6051a2c3d4e5f607182",
+        "code": "UPSTREAM_ERROR",
+        "outcome": "ERROR",
+        "protocol_version": "1.0",
+        "request_hash": "9b1c6e0f4a5d3e2b7c8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c",
+        "upstream_body": "{\"latency\":1.5}",
+        "upstream_status": 502
+      },
+      "canonical_hex": "7b226361706162696c6974795f6964223a226361705f3766336332613931643465386236303531613263336434653566363037313832222c22636f6465223a22555053545245414d5f4552524f52222c226f7574636f6d65223a224552524f52222c2270726f746f636f6c5f76657273696f6e223a22312e30222c22726571756573745f68617368223a2239623163366530663461356433653262376338613966306531643263336234613566366537643863396230613166326533643463356236613766386539643063222c22757073747265616d5f626f6479223a227b5c226c6174656e63795c223a312e357d222c22757073747265616d5f737461747573223a3530327d",
+      "result_hash": "7945a76b82ecae8a7017ca6714d27766ff6ab01fe16c50af72428e350c39a492"
+    },
+    {
+      "name": "upstream_unreachable",
+      "input": {
+        "outcome": "ERROR",
+        "code": "UPSTREAM_ERROR",
+        "upstream_status": null,
+        "upstream_body_raw": null
+      },
+      "envelope": {
+        "capability_id": "cap_7f3c2a91d4e8b6051a2c3d4e5f607182",
+        "code": "UPSTREAM_ERROR",
+        "outcome": "ERROR",
+        "protocol_version": "1.0",
+        "request_hash": "9b1c6e0f4a5d3e2b7c8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c",
+        "upstream_body": null,
+        "upstream_status": null
+      },
+      "canonical_hex": "7b226361706162696c6974795f6964223a226361705f3766336332613931643465386236303531613263336434653566363037313832222c22636f6465223a22555053545245414d5f4552524f52222c226f7574636f6d65223a224552524f52222c2270726f746f636f6c5f76657273696f6e223a22312e30222c22726571756573745f68617368223a2239623163366530663461356433653262376338613966306531643263336234613566366537643863396230613166326533643463356236613766386539643063222c22757073747265616d5f626f6479223a6e756c6c2c22757073747265616d5f737461747573223a6e756c6c7d",
+      "result_hash": "1e2865ad9d6f3eba679cd58faa069327883dbbbd6d3a1434f4e2877e2cd2c57c"
+    },
+    {
+      "name": "denied",
+      "input": {
+        "outcome": "DENIED",
+        "code": "CHALLENGE_USED",
+        "upstream_status": null,
+        "upstream_body_raw": null
+      },
+      "envelope": {
+        "capability_id": "cap_7f3c2a91d4e8b6051a2c3d4e5f607182",
+        "code": "CHALLENGE_USED",
+        "outcome": "DENIED",
+        "protocol_version": "1.0",
+        "request_hash": "9b1c6e0f4a5d3e2b7c8a9f0e1d2c3b4a5f6e7d8c9b0a1f2e3d4c5b6a7f8e9d0c",
+        "upstream_body": null,
+        "upstream_status": null
+      },
+      "canonical_hex": "7b226361706162696c6974795f6964223a226361705f3766336332613931643465386236303531613263336434653566363037313832222c22636f6465223a224348414c4c454e47455f55534544222c226f7574636f6d65223a2244454e494544222c2270726f746f636f6c5f76657273696f6e223a22312e30222c22726571756573745f68617368223a2239623163366530663461356433653262376338613966306531643263336234613566366537643863396230613166326533643463356236613766386539643063222c22757073747265616d5f626f6479223a6e756c6c2c22757073747265616d5f737461747573223a6e756c6c7d",
+      "result_hash": "874ff809519632e8ebe54238f3ae78fa0bba1de24bc2cd923818d384abd50af6"
+    }
+  ]
+}

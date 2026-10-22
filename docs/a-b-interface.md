@@ -84,7 +84,7 @@ Accept: application/json
 - Issuer/Agent/Broker 公钥轮换与旧公钥验证窗口；
 - Clock skew 上限及可信时钟来源；
 - Capability CAS、故障恢复、幂等冲突和外部 API 成功但状态未落盘的语义；
-- 业务 `result_envelope` schema 与 result hash；
+- ~~业务 `result_envelope` schema 与 result hash~~：已固化，见 `shared/README.md`；
 - 是否需要 mTLS/SPIFFE 等传输身份；这不替代对象签名。
 
 ## 稳定错误码（A 已使用）

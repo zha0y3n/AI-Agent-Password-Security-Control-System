@@ -11,6 +11,7 @@ from agent_aa.models import (
     CredentialStatus,
     ExecutionBundle,
     HolderProof,
+    ResultEnvelope,
     SignedCapability,
     SignedReceipt,
     TaskContext,
@@ -25,6 +26,7 @@ MODELS = {
     "signed-capability.schema.json": SignedCapability,
     "holder-proof.schema.json": HolderProof,
     "signed-receipt.schema.json": SignedReceipt,
+    "result-envelope.schema.json": ResultEnvelope,
     "execution-bundle.schema.json": ExecutionBundle,
 }
 

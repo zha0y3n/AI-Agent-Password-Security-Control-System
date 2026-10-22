@@ -1,0 +1,105 @@
+{
+  "$defs": {
+    "JsonValue": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "integer"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "items": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "array"
+        },
+        {
+          "additionalProperties": {
+            "$ref": "#/$defs/JsonValue"
+          },
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "$id": "https://agent-credential-guard.example/schema/result-envelope.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "The execution result whose ZTCANON-JSON-v1 SM3 digest is ``result_hash``.\n\n``upstream_body`` is the upstream JSON value, or its raw text as a string\nwhen that JSON is not ZTCANON-JSON-v1 (for example, it contains floats).",
+  "properties": {
+    "capability_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]*$",
+      "title": "Capability Id",
+      "type": "string"
+    },
+    "code": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 3,
+          "pattern": "^[A-Z][A-Z0-9_]*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Code"
+    },
+    "outcome": {
+      "enum": [
+        "SUCCESS",
+        "DENIED",
+        "ERROR"
+      ],
+      "title": "Outcome",
+      "type": "string"
+    },
+    "protocol_version": {
+      "const": "1.0",
+      "default": "1.0",
+      "title": "Protocol Version",
+      "type": "string"
+    },
+    "request_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Request Hash",
+      "type": "string"
+    },
+    "upstream_body": {
+      "$ref": "#/$defs/JsonValue"
+    },
+    "upstream_status": {
+      "anyOf": [
+        {
+          "maximum": 599,
+          "minimum": 100,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "title": "Upstream Status"
+    }
+  },
+  "required": [
+    "capability_id",
+    "request_hash",
+    "outcome",
+    "code",
+    "upstream_status",
+    "upstream_body"
+  ],
+  "title": "ResultEnvelope",
+  "type": "object"
+}

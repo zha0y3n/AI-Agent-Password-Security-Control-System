@@ -9,10 +9,10 @@ from __future__ import annotations
 from typing import Any
 
 from .canonical import canonical_json
-from .crypto import b64url_decode, b64url_encode, protocol_message, sign_sm2, verify_sm2
+from .crypto import b64url_decode, b64url_encode, protocol_message, sign_sm2, sm3_hex, verify_sm2
 from .errors import VerificationError
 from .keys import KeyRegistry
-from .models import ExecutionReceipt, ProtocolSignature, SignedReceipt
+from .models import ExecutionReceipt, ProtocolSignature, ResultEnvelope, SignedReceipt
 
 RECEIPT_DOMAIN = "EXECUTION_RECEIPT"
 
@@ -46,3 +46,16 @@ class ReceiptVerifier:
         )
         message = protocol_message(RECEIPT_DOMAIN, canonical_json(body))
         verify_sm2(public_key, message, b64url_decode(receipt.signature.value))
+
+    def verify_result(self, receipt: SignedReceipt, envelope: ResultEnvelope, *, expected_broker_id: str) -> None:
+        """Verify the receipt signature and that it covers exactly this result."""
+
+        self.verify(receipt, expected_broker_id=expected_broker_id)
+        body = receipt.body
+        if (
+            sm3_hex(canonical_json(envelope)) != body.result_hash
+            or envelope.capability_id != body.capability_id
+            or envelope.request_hash != body.request_hash
+            or envelope.outcome != body.outcome
+        ):
+            raise VerificationError("RESULT_BINDING_MISMATCH", "result envelope is not the one bound by the receipt")

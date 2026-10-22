@@ -18,14 +18,14 @@ Go 实现，国密原语来自 [`emmansun/gmsm`](https://github.com/emmansun/gms
 | 阶段 | 内容 | 状态 |
 |---|---|---|
 | 一：基础设施 | 国密封装、SQLite、SM4-GCM Vault、Credential 生命周期与 Epoch、原子消费、幂等、Mock 上游、审计哈希链、Challenge、埋点、Docker | 完成 |
-| 二：接入 A 的协议 | `ZTCANON-JSON-v1`、Request Hash、SM2 域分离验签（三组共享向量）、可信公钥表、校验流水线、`POST /v1/execute`、Receipt 签发（A 的 `ReceiptVerifier` 验过）、错误码与 HTTP 状态 | 完成；`result_envelope` 结构待 A/C 联审 |
+| 二：接入 A 的协议 | `ZTCANON-JSON-v1`、Request Hash、SM2 域分离验签（三组共享向量）、可信公钥表、校验流水线、`POST /v1/execute`、Receipt 签发（A 的 `ReceiptVerifier` 验过）、错误码与 HTTP 状态 | 完成；`result_envelope` 已固化进 `shared/` |
 | 三：A + B 联调 | 真实 HTTP 全链路：Agent → AA → Challenge → Holder Proof → Broker → Vault → Mock → Receipt → Audit；`e2e-demo.py` 的 7 类攻击样例全部按预期拒绝或幂等处理，旧 Epoch 另行手工验证 | 完成（B 侧）；A 已实现 `BROKER_LIVE`，待真实联调 |
 | 四：面向 C 的支撑 | 副作用计数、Capability 状态查询、审计导出 / 复核、Broker 公钥记录、Metrics、状态重置、种子数据与批量 Credential、docker compose | 完成；接口是否够用待 C 确认 |
 | 五：竞赛化 | 设计说明、威胁与防御对照、答辩材料（见上方“文档”） | 文档完成；之后只修 Bug，不改协议 |
 
 **B 约 92%。** 剩下的部分：
 
-- 等 A/C 联审：`result_envelope`、统一错误码表、C 的接口需求。
+- 等 C 确认：接口是否够用。
 - A 端 mTLS：A 的 Status 查询已能出示客户端证书（`broker_status_client_cert_file` / `broker_status_client_key_file`，B 协助修改，待 A 复核）；与真实 B 的 mTLS 模式已验证。
 
 2026-10-21 补齐的 B 侧项目：
@@ -232,7 +232,7 @@ B 返回的 `Info` 字段与 `shared/schemas/credential-status.schema.json` 一�
 
   Capability 验签通过之前，它的字段可能是伪造的，Broker 不为这类内容签名。同一 Capability 带新 Challenge 再次提交时（幂等重放），返回的是**字节相同**的原回执。
 
-- **`result_envelope`（B 的提案，待 A/C 联审后固化进 `shared/`）**：`result_hash = SM3(ZTCANON(result_envelope))`。
+- **`result_envelope`**：`result_hash = SM3(ZTCANON(result_envelope))`。结构已固化为 `shared/schemas/result-envelope.schema.json`，跨语言向量为 `shared/test-vectors/result-envelope-v1.json`（`internal/receipt/vector_test.go` 逐字节核对）。
 
   ```json
   {
@@ -246,7 +246,7 @@ B 返回的 `Info` 字段与 `shared/schemas/credential-status.schema.json` 一�
   }
   ```
 
-  调用方复核步骤：用 A 的 `canonical_json` 重新规范化 `result_envelope`，再算 SM3，和 `receipt.body.result_hash` 比对，最后用 Broker 公钥验签。`scripts/verify-a-receipt.py` 和 `scripts/e2e-demo.py` 都是这么做的。
+  调用方复核：A 的 `ReceiptVerifier.verify_result()` 依次验签、重算 `result_hash`、比对 `capability_id` / `request_hash` / `outcome`。`scripts/verify-a-receipt.py` 和 `scripts/e2e-demo.py` 都用它复核真实 Broker 的输出。
 
 ## 面向 C 的实验支撑
 
@@ -349,7 +349,6 @@ docs/                 设计说明、威胁与防御对照、答辩材料
 - **Credential Epoch 来源**：A 默认 `STATIC_DEMO` 仍把 epoch 写死为 17；A 已实现可选的 `BROKER_LIVE`，通过 `GET /v1/credentials/{id}/status` 获取实时 epoch。真实 A+B 生命周期联调（轮换、撤销、Status 不可用/伪造、撤销竞态）尚未完成；`seed.sh` 仍把 `github-prod` 轮换到 17 以兼容默认演示。B 执行事务内的 `ACTIVE + epoch` 检查仍是最终线性化点。
 - **错误码与 HTTP 状态码**：A 已提交统一错误码表 [`docs/error-codes.md`](../docs/error-codes.md)，但 HTTP 状态仍有分歧（A 的 Challenge 类拒绝只有 `CHALLENGE_MISMATCH`，验签失败返回 401；Broker 细分为 5 个 Challenge 码，并统一返回 403）。C 的实验脚本依赖 Broker 现有的码，因此暂不改动，等 A/B/C 联审。
 - **从旧版本升级**：检查点改用独立密钥后，旧数据库中由 Receipt 密钥签的检查点无法通过 `/v1/audit/verify`。开发 / 实验环境请执行一次 `reset`。
-- **`result_envelope` 结构与 Receipt 返回方式**：Receipt 目前随 `/v1/execute` 响应一起返回，并在幂等重放时原样再返回。两者都是 B 的提案，A/C 联审后需写入 `shared/schemas/` 和 `docs/crypto-protocol.md` §6。在此之前不要改动 `shared/`。
 - **DENIED 回执**：只为已验签的 Capability 签发，每次拒绝都要做一次 SM2 签名。如果 C 的压测发现这部分开销明显，可以改为按需签发。
 - **外部 API 成功但状态未落盘**：上游已执行而 Broker 写库前崩溃时，Capability 会停在 `CONSUMING`。重启时 Broker 把它们改为 `FAILED`，之后的提交返回 `CAPABILITY_ALREADY_FAILED`，不会重复执行；Agent 需要重新申请 Capability（新 Capability 的幂等键不同，上游无法去重）。恢复只在启动时进行，前提是同一数据库只有一个 Broker 进程。
 - **公钥轮换**：AA / Agent 公钥表可以用 `SIGHUP` 热加载。Broker 自己的 Receipt / 检查点密钥仍在启动时加载，更换需要重启；`/v1/broker/key-registry` 只发布当前密钥，无法把泄露的旧 Broker 密钥标记为 `REVOKED`，只能换用新的 `BROKER_KEY_ID` 并通知验证方。

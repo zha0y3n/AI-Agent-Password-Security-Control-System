@@ -16,7 +16,7 @@ from agent_aa.canonical import canonical_json, strict_json_loads
 from agent_aa.crypto import sm3_hex
 from agent_aa.errors import VerificationError
 from agent_aa.keys import KeyRegistry
-from agent_aa.models import SignedReceipt
+from agent_aa.models import ResultEnvelope, SignedReceipt
 from agent_aa.receipt import ReceiptVerifier
 
 
@@ -32,6 +32,10 @@ def main(directory: Path) -> None:
         sys.exit("result_envelope is not ZTCANON-JSON-v1 canonical bytes")
     if sm3_hex(envelope_bytes) != receipt.body.result_hash:
         sys.exit("result_hash does not match SM3(result_envelope)")
+    # result_envelope 必须符合 shared/schemas/result-envelope.schema.json，且与回执绑定一致
+    verifier.verify_result(
+        receipt, ResultEnvelope.model_validate(strict_json_loads(envelope_bytes)), expected_broker_id=broker_id
+    )
 
     tampered = receipt.model_copy(update={"body": receipt.body.model_copy(update={"outcome": "DENIED"})})
     try:

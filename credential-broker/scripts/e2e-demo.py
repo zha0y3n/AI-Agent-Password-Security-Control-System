@@ -24,7 +24,7 @@ from typing import Any
 from agent_aa.agent import DeterministicAgent
 from agent_aa.authority import capability_hash, request_hash
 from agent_aa.canonical import canonical_json, strict_json_loads
-from agent_aa.crypto import b64url_encode, generate_sm2_private_key, load_private_key_pem, protocol_message, sign_sm2, sm3_hex
+from agent_aa.crypto import b64url_encode, generate_sm2_private_key, load_private_key_pem, protocol_message, sign_sm2
 from agent_aa.holder import HOLDER_PROOF_DOMAIN, create_holder_proof
 from agent_aa.keys import KeyRegistry
 from agent_aa.models import (
@@ -34,6 +34,7 @@ from agent_aa.models import (
     HolderProofBody,
     KeyRegistryDocument,
     ProtocolSignature,
+    ResultEnvelope,
     SignedCapability,
     SignedReceipt,
 )
@@ -139,9 +140,9 @@ def main() -> None:
     check("Broker 执行成功", code == 200 and out["decision"]["allowed"], f"HTTP {code} {out['decision'].get('code')}")
     receipt = SignedReceipt.model_validate(out["receipt"])
     try:
-        receipts.verify(receipt, expected_broker_id=broker_id)
-        ok = sm3_hex(canonical_json(out["result_envelope"])) == receipt.body.result_hash
-        check("A 的 ReceiptVerifier 复核回执，result_hash 与 envelope 一致", ok)
+        envelope = ResultEnvelope.model_validate(out["result_envelope"])
+        receipts.verify_result(receipt, envelope, expected_broker_id=broker_id)
+        check("A 的 ReceiptVerifier 复核回执，result_envelope 符合共享 schema 且被回执绑定", True)
     except Exception as exc:  # noqa: BLE001
         check("A 的 ReceiptVerifier 复核回执", False, repr(exc))
     check("回执 outcome=SUCCESS 且绑定本 Capability", receipt.body.outcome == "SUCCESS"

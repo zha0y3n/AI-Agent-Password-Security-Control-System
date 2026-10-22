@@ -237,6 +237,37 @@ class SignedReceipt(StrictModel):
     signature: ProtocolSignature
 
 
+ErrorCode = Annotated[str, Field(min_length=3, max_length=64, pattern=r"^[A-Z][A-Z0-9_]*$")]
+
+
+class ResultEnvelope(StrictModel):
+    """The execution result whose ZTCANON-JSON-v1 SM3 digest is ``result_hash``.
+
+    ``upstream_body`` is the upstream JSON value, or its raw text as a string
+    when that JSON is not ZTCANON-JSON-v1 (for example, it contains floats).
+    """
+
+    protocol_version: Literal["1.0"] = "1.0"
+    capability_id: Identifier
+    request_hash: HashHex
+    outcome: Literal["SUCCESS", "DENIED", "ERROR"]
+    code: ErrorCode | None
+    upstream_status: Annotated[int, Field(ge=100, le=599)] | None
+    upstream_body: JsonValue
+
+    @model_validator(mode="after")
+    def validate_outcome(self) -> "ResultEnvelope":
+        if (self.outcome == "SUCCESS") != (self.code is None):
+            raise ValueError("only a SUCCESS result has no code")
+        if self.outcome == "SUCCESS" and self.upstream_status is None:
+            raise ValueError("a SUCCESS result must carry the upstream status")
+        if self.outcome == "DENIED" and self.upstream_status is not None:
+            raise ValueError("a DENIED result must not reach the upstream")
+        if self.upstream_status is None and self.upstream_body is not None:
+            raise ValueError("an upstream body requires an upstream status")
+        return self
+
+
 class PublicKeyRecord(StrictModel):
     key_id: Identifier
     subject_id: Identifier

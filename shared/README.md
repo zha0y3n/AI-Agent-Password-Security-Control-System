@@ -13,23 +13,38 @@
 | `execution-bundle.schema.json` | `agent_aa.models.ExecutionBundle` | Agent→Broker 的 request + capability + proof |
 | `signed-receipt.schema.json` | `agent_aa.models.SignedReceipt` | Broker 执行回执 |
 | `credential-status.schema.json` | `agent_aa.models.CredentialStatus` | Broker→AA 的非秘密 Credential 生命周期元数据 |
+| `result-envelope.schema.json` | `agent_aa.models.ResultEnvelope` | Receipt 的 `result_hash` 所覆盖的执行结果 |
 
 `credential-status.schema.json` 只包含 `credential_id`、`provider`、`status`、`credential_epoch`、`created_at`、`updated_at`。它不是 Agent 可提交的授权上下文，也不包含 Credential 明文或密文。A 的 `BROKER_LIVE` 读取该元数据；Broker 执行事务内的 `ACTIVE + epoch` 原子检查仍是最终授权点。
 
-## 尚未固化的协议
-
-`result_envelope` 仍是 B 的提案：
+## `result_envelope`（2026-10-21 固化，B 提议并实现，待 A/C 复核）
 
 ```text
-result_hash = SM3(ZTCANON-JSON-v1(result_envelope))
+result_hash = lowercase_hex(SM3(ZTCANON-JSON-v1(result_envelope)))
 ```
 
-在 A/B/C 联审并写入 `shared/schemas/` 之前，不要把任意业务 JSON 当作跨语言稳定的 Receipt 语义。需要确认：
+| 字段 | 取值 |
+|---|---|
+| `protocol_version` | `"1.0"` |
+| `capability_id` / `request_hash` | 与 Receipt 中的同名字段相同 |
+| `outcome` | `SUCCESS` / `DENIED` / `ERROR`，与 Receipt 的 `outcome` 相同 |
+| `code` | 错误码（见 `docs/error-codes.md`）；只有 `SUCCESS` 为 `null` |
+| `upstream_status` | 上游 HTTP 状态码（100～599）；未调用上游时为 `null`。`SUCCESS` 必须有，`DENIED` 必须没有 |
+| `upstream_body` | 上游 JSON；不符合 ZTCANON-JSON-v1（如含浮点）时为原始文本字符串；未调用上游时为 `null` |
 
-- 成功、业务错误、授权拒绝分别是否签发 Receipt；
-- 幂等重放是否返回字节相同的 Receipt 和 envelope；
-- 哪些早期拒绝没有 Receipt；
-- `result_hash` 与 Receipt 的绑定、错误码与 C CSV 字段映射。
+Receipt 签发规则：
+
+| 场景 | outcome | code | Receipt |
+|---|---|---|---|
+| 上游 2xx | `SUCCESS` | `null` | 签发，Capability → `CONSUMED` |
+| 上游 3xx/4xx | `ERROR` | `UPSTREAM_REJECTED` | 签发，Capability → `CONSUMED` |
+| 上游不可达 / 5xx，或消费后 Credential 已变化 | `ERROR` | `UPSTREAM_ERROR` / `CREDENTIAL_UNAVAILABLE` | 签发，Capability → `FAILED` |
+| Capability 验签通过后的任何拒绝 | `DENIED` | 拒绝码 | 签发，状态不变 |
+| `schema` / `capability_signature` 阶段的拒绝 | — | — | **不签发**（字段可能是伪造的） |
+
+- 幂等重放（同一 Capability、同一请求、新 Challenge）返回**字节相同**的 Receipt 与 `result_envelope`；
+- 验证方先用 `ReceiptVerifier.verify_result()`（或等价步骤：验签 → 重算 `result_hash` → 比对 `capability_id` / `request_hash` / `outcome`），不一致返回 `RESULT_BINDING_MISMATCH`；
+- C 的 CSV 记录 `outcome` 与 `code`，与 `decision.code` 一致。
 
 ## Test vectors
 
@@ -39,6 +54,8 @@ result_hash = SM3(ZTCANON-JSON-v1(result_envelope))
 - Capability、Holder Proof、Execution Receipt 三个签名域；
 - SM2 公钥、DER 签名和测试私钥标量。
 
+`test-vectors/result-envelope-v1.json` 覆盖五类 `result_envelope`（成功、上游 4xx、上游非规范 JSON、上游不可达、拒绝）：Broker 的输入、envelope、规范字节和 `result_hash`。Go（`internal/receipt/vector_test.go`）与 Python（`tests/test_result_envelope.py`）都逐字节核对。它不含签名，可确定性重新生成。
+
 向量中的私钥仅用于互操作测试，绝不能用于部署。SM2 签名具有随机性：重新签名不要求 DER 字节相同，只要求双方互相验签成功。
 
 只有权威模型或协议字节真正变化时才重新生成 Schema/向量：
@@ -46,6 +63,7 @@ result_hash = SM3(ZTCANON-JSON-v1(result_envelope))
 ```bash
 .venv/bin/python scripts/generate-schemas.py
 .venv/bin/python scripts/generate-test-vectors.py
+.venv/bin/python scripts/generate-result-envelope-vectors.py
 ```
 
 不要为了“刷新”而重生成向量；这会产生随机 SM2 签名差异和噪声 diff。
